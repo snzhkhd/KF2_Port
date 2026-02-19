@@ -79,6 +79,26 @@ RESET:
 
 
 
+VabPair FindVabForSeq(std::shared_ptr<TFile> tFile, int seqIdx) {
+    VabPair pair;
+    for (int i = seqIdx - 1; i >= 0; i--) {
+        const auto& file = tFile->getFile(i);
+        FTYPE type = tFile->getEType(file);
+
+        // Если нашли VH, проверяем его размер. 
+        // Если он < 5000 байт, скорее всего это мелкий SFX, ищем дальше.
+        if (type == FTYPE::VH && file.size() > 5000 && pair.vh == -1) {
+            pair.vh = i;
+            // VB обычно идет сразу за VH
+            if (i + 1 < tFile->getNumFiles()) pair.vb = i + 1;
+            break;
+        }
+    }
+    // Если ничего "крупного" не нашли, берем глобальный банк
+    if (pair.vh == -1) { pair.vh = 2; pair.vb = 3; }
+    return pair;
+}
+
 int main()
 {
 
@@ -99,145 +119,116 @@ int main()
 
     // 1. Путь к архиву звуков
     // VAB.T обычно содержит пары: (0=Header, 1=Body), (2=Header, 3=Body) и т.д.
-    std::string archivePath = "F:/PSX/CHDTOISO-WINDOWS-main/King's Field/CD/COM/VAB.T";
+    std::string archivePath = "F:/PSX/CHDTOISO-WINDOWS-main/King's Field/CD/COM/VAB.T"; //Western Shore Sequence ?
+    auto tFile = ResourceManager::LoadTFile(archivePath);
 
-    // Индекс пары файлов (Bank Index). 0 означает файлы 0 и 1. 2 означает файлы 2 и 3.
-    int currentBankIndex = 0;
+    AudioSystem audio;
 
-    // Индекс звука внутри текущего банка
-    int currentSoundIndex = 0;
+    int currentSeqIdx = 112;
 
-    int OldSoundIndex = 0;
+    VabPair pair;
+    pair.vh = 2;
+    pair.vb = 3;
+    auto LoadTrack = [&](int seqIdx) {
+        if (seqIdx < 0 || seqIdx >= tFile->getNumFiles()) return;
 
-    SoundBank soundBank;
-    bool bankLoaded = false;
-    std::string statusMessage = "Press ENTER to load bank";
+        // 1. Останавливаем всё старое
+        audio.UnloadAll();
 
-    std::string FileName = "VAB";
-
-    // Функция перезагрузки банка
-    auto ReloadBank = [&](int fileIndexVH) {
-        // Проверка на четность (VH всегда четный в VAB.T)
-        if (fileIndexVH % 2 != 0) fileIndexVH--;
-        if (fileIndexVH < 0) fileIndexVH = 0;
-
-        statusMessage = "Loading...";
-
-        // Получаем файлы через ваш ResourceManager
-        // ВАЖНО: убедитесь, что LoadTFile и getFile работают
-        try {
-            auto tFile = ResourceManager::LoadTFile(archivePath);
-            if (!tFile || fileIndexVH + 1 >= tFile->getNumFiles()) 
-            {
-                statusMessage = "Error: Archive end reached";
-                FileName = tFile->getFilename();
-                return;
-            }
-
-            ByteArray& vhData = tFile->getFile(fileIndexVH);
-            ByteArray& vbData = tFile->getFile(fileIndexVH + 1);
-
-            if (soundBank.Load(vhData, vbData)) {
-                bankLoaded = true;
-                currentBankIndex = fileIndexVH;
-                currentSoundIndex = 0;
-                statusMessage = TextFormat("Loaded Bank #%d (Files %d & %d)",
-                    currentBankIndex / 2, fileIndexVH, fileIndexVH + 1);
-            }
-            else {
-                statusMessage = "Error parsing VAB data";
-            }
-        }
-        catch (...) {
-            statusMessage = "Exception loading files";
-        }
-    };
-
-    // Загружаем первый банк при старте
-    ReloadBank(0);
-
-    while (!WindowShouldClose())
-    {
-        // --- УПРАВЛЕНИЕ ---
-
-        // 1. Переключение банков (PageUp / PageDown) - прыгаем через 2 файла
-        if (IsKeyPressed(KEY_PAGE_DOWN))
-        {
-            soundBank.StopAll();
-            ReloadBank(currentBankIndex + 2);
-        }
-        if (IsKeyPressed(KEY_PAGE_UP)) 
-        {
-            soundBank.StopAll();
-            ReloadBank(currentBankIndex - 2);
-        }
-
-        // 2. Переключение звуков (Left / Right)
-        if (bankLoaded && soundBank.GetSoundCount() > 0) 
-        {
-            if (IsKeyPressed(KEY_RIGHT)) 
-            {
-                OldSoundIndex = currentSoundIndex;
-                currentSoundIndex++;
-                if (currentSoundIndex >= soundBank.GetSoundCount())
-                {
-                    currentSoundIndex = 0;
-                    OldSoundIndex = currentSoundIndex;
-                }
-                soundBank.StopAll();
-                soundBank.Play(currentSoundIndex); // Авто-проигрывание при смене
-            }
-            if (IsKeyPressed(KEY_LEFT)) 
-            {
-                OldSoundIndex = currentSoundIndex;
-                currentSoundIndex--;
-                if (currentSoundIndex < 0)
-                {
-                    OldSoundIndex = currentSoundIndex;
-                    currentSoundIndex = (int)soundBank.GetSoundCount() - 1;
-                }
-                soundBank.StopAll();
-                soundBank.Play(currentSoundIndex);
-            }
-
-            // 3. Проигрывание (Space / Enter)
-            if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) 
-            {
-                if (soundBank.IsPlayering(currentSoundIndex))
-                    soundBank.StopAll();
-                else
-                    soundBank.Play(currentSoundIndex);
-            }
-        }
-
-        // --- ОТРИСОВКА ---
-        BeginDrawing();
-        ClearBackground(RAYWHITE);
-
-        DrawText("King's Field VAB Player", 10, 10, 20, DARKGRAY);
-        DrawText(statusMessage.c_str(), 10, 40, 20, bankLoaded ? DARKGREEN : RED);
-
-        if (bankLoaded) {
-            DrawText(TextFormat("Current Bank (Files): %d & %d | %s", currentBankIndex, currentBankIndex + 1, FileName.c_str()), 10, 80, 20, BLACK);
-            DrawText(TextFormat("Total Sounds: %zu", soundBank.GetSoundCount()), 10, 110, 20, BLACK);
-
-            DrawRectangle(10, 150, 780, 100, LIGHTGRAY);
-            DrawText(TextFormat("SOUND: %d", currentSoundIndex), 30, 170, 40, MAROON);
-
-            DrawText("Controls:", 10, 300, 20, DARKGRAY);
-            DrawText("- Left / Right : Select Sound (+Auto Play)", 30, 330, 18, GRAY);
-            DrawText("- Space : Play Current Sound Again", 30, 350, 18, GRAY);
-            DrawText("- PageUp / PageDn : Next/Prev Bank (File Pair)", 30, 370, 18, GRAY);
+        if (pair.vh != -1 && pair.vb != -1) {
+            TraceLog(LOG_INFO, "Loading VAB for SEQ %d: VH=%d, VB=%d", seqIdx, pair.vh, pair.vb);
+            audio.LoadVab(tFile->getFile(pair.vh), tFile->getFile(pair.vb));
         }
         else {
-            DrawText("No bank loaded or file error.", 10, 100, 20, RED);
+            // Если рядом ничего нет, пробуем загрузить глобальный банк (T0 и T1)
+            audio.LoadVab(tFile->getFile(0), tFile->getFile(1));
+        }
+
+        // 3. Запускаем музыку
+        audio.PlayMusic(tFile->getFile(seqIdx));
+    };
+
+    if (currentSeqIdx != -1) LoadTrack(currentSeqIdx);
+
+    while (!WindowShouldClose()) 
+    {
+
+        if (IsKeyPressed(KEY_UP)) {
+            // Ищем предыдущий VH выше по списку
+            for (int i = pair.vh - 1; i >= 0; i--) {
+                if (tFile->getEType(tFile->getFile(i)) == FTYPE::VH) {
+                    pair.vh = i;
+                    pair.vb = i + 1;
+                    audio.LoadVab(tFile->getFile(pair.vh), tFile->getFile(pair.vb));
+                    // Перезапускаем текущую музыку с новыми инструментами
+                    audio.PlayMusic(tFile->getFile(currentSeqIdx));
+                    break;
+                }
+            }
+        }
+        if (IsKeyPressed(KEY_DOWN)) {
+            // Ищем предыдущий VH выше по списку
+            for (int i = pair.vh +1; i >= 0; i++) {
+                if (tFile->getEType(tFile->getFile(i)) == FTYPE::VH) {
+                    pair.vh = i;
+                    pair.vb = i + 1;
+                    audio.LoadVab(tFile->getFile(pair.vh), tFile->getFile(pair.vb));
+                    // Перезапускаем текущую музыку с новыми инструментами
+                    audio.PlayMusic(tFile->getFile(currentSeqIdx));
+                    break;
+                }
+            }
+        }
+
+        // Управление: листаем сиквенсы
+        if (IsKeyPressed(KEY_PAGE_DOWN)) {
+            // Ищем следующий файл типа SEQ
+            for (int i = currentSeqIdx + 1; i < tFile->getNumFiles(); i++) {
+                if (tFile->getEType(tFile->getFile(i)) == FTYPE::SEQ) {
+                    currentSeqIdx = i;
+                    LoadTrack(currentSeqIdx);
+                    break;
+                }
+            }
+        }
+        if (IsKeyPressed(KEY_PAGE_UP)) {
+            // Ищем предыдущий файл типа SEQ
+            for (int i = currentSeqIdx - 1; i >= 0; i--) {
+                if (tFile->getEType(tFile->getFile(i)) == FTYPE::SEQ) {
+                    currentSeqIdx = i;
+                    LoadTrack(currentSeqIdx);
+                    break;
+                }
+            }
+        }
+        
+
+
+
+
+        audio.Update();
+
+        BeginDrawing();
+        ClearBackground(GetColor(0x181818FF));
+
+        DrawText("King's Field Music Player", 20, 20, 20, LIGHTGRAY);
+
+        DrawText(TextFormat("Current SEQ: %d | VH <%i> VB <%i>", currentSeqIdx, pair.vh, pair.vb), 20, 60, 30, GREEN);
+        DrawText("Use PgUp / PgDn to change tracks", 20, 100, 20, GRAY);
+
+        // Визуализация (какие инструменты сейчас активны)
+        DrawText("Active MIDI Programs:", 20, 150, 16, RAYWHITE);
+        int y = 0;
+        for (int i = 0; i < 128; i++) {
+            if (audio.IsProgramReady(i)) { // Добавьте такой метод в AudioSystem
+                DrawRectangle(20 + (i % 16) * 40, 180 + (i / 16) * 40, 35, 35, DARKGREEN);
+                DrawText(TextFormat("%d", i), 25 + (i % 16) * 40, 190 + (i / 16) * 40, 10, WHITE);
+            }
         }
 
         EndDrawing();
     }
-
-    // Очистка
- //   soundBank.UnloadAll();
+  
     CloseAudioDevice();
     CloseWindow();
 

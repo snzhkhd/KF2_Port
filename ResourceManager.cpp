@@ -42,7 +42,7 @@ std::shared_ptr<TFile> ResourceManager::LoadTFile(const std::string& path)
     if (it != tfiles_.end()) {
         return it->second;
     }
-    printf("LoadTFile: use cach..\n");
+    printf("LoadTFile: load new..\n");
     // Иначе создаем новый, загружаем и кешируем
     auto tfile = std::make_shared<TFile>(path);
     tfiles_[path] = tfile;

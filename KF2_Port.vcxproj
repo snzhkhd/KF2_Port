@@ -156,6 +156,7 @@
     <ClInclude Include="GameContext.h" />
     <ClInclude Include="math.h" />
     <ClInclude Include="object.h" />
+    <ClInclude Include="PsxAudio.h" />
     <ClInclude Include="ResourceManager.h" />
     <ClInclude Include="soundbank.h" />
     <ClInclude Include="structs.h" />
