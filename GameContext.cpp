@@ -37,9 +37,15 @@ void Game::InitParticleSystem()
 {
 }
 
-void Game::LoadGameData()
+bool Game::LoadGameData()
 {
-    ResourceManager::LoadGameDatabases("./CD/COM/FDAT.T");
+    if (g_LanguageID >= 0 && g_LanguageID <= 2)
+    {
+        TraceLog(LOG_ERROR, "Game::LoadGameData, LanguageID is out of range");
+        return false;
+    }
+    //g_LanguageID
+    ResourceManager::LoadGameDatabases(g_LanguageID);
 }
 
 void Game::InitPlayerInventory()

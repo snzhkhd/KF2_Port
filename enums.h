@@ -1,6 +1,12 @@
 #pragma once
 #include <cstdint>
 
+enum RETURN_CODE
+{
+    ERROR_LOAD_DATA = 100,
+    PRESS_START = 200,
+    QUIT = 0,
+};
 
 enum ObjectClassType : uint8_t
 {

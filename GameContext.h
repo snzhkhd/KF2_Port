@@ -36,7 +36,7 @@ namespace Game {
     void InitEntitySystem();
     void InitParticleSystem();
 
-    void LoadGameData();
+    bool LoadGameData();
 
     void InitPlayerInventory();
 

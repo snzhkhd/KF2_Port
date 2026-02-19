@@ -1,5 +1,6 @@
 #pragma once
 #include "TextureDB.h"
+#include "soundbank.h"
 #include <memory>
 #include <unordered_map>
 
@@ -17,7 +18,7 @@ public:
     static std::shared_ptr<Texture2D> GetTextureByVram(int x, int y);
 
     // Специальный загрузчик для таблиц данных (Items, Spells)
-    static void LoadGameDatabases(const std::string& path);
+    static void LoadGameDatabases(const int16_t LanguageID);
 
     //KF
     static std::shared_ptr<TFile> LoadTFile(const std::string& path);

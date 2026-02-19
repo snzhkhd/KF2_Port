@@ -24,8 +24,15 @@ std::shared_ptr<Texture2D> ResourceManager::GetTextureByVram(int x, int y)
 	return std::shared_ptr<Texture2D>();
 }
 
-void ResourceManager::LoadGameDatabases(const std::string& path)
+void ResourceManager::LoadGameDatabases(const int16_t LanguageID)
 {
+    ResourceManager::LoadTFile("./CD/COM/MO.T");
+    ResourceManager::LoadTFile("./CD/COM/TALK" + std::to_string(LanguageID) + ".T");
+    ResourceManager::LoadTFile("./CD/COM/VAB.T");
+    ResourceManager::LoadTFile("./CD/COM/FDAT.T");
+    ResourceManager::LoadTFile("./CD/COM/RTIM.T");
+    ResourceManager::LoadTFile("./CD/COM/RTMD.T");
+    ResourceManager::LoadTFile("./CD/COM/ITEM" + std::to_string(LanguageID) + ".T");
 }
 
 std::shared_ptr<TFile> ResourceManager::LoadTFile(const std::string& path)
@@ -35,7 +42,7 @@ std::shared_ptr<TFile> ResourceManager::LoadTFile(const std::string& path)
     if (it != tfiles_.end()) {
         return it->second;
     }
-
+    printf("LoadTFile: use cach..\n");
     // Иначе создаем новый, загружаем и кешируем
     auto tfile = std::make_shared<TFile>(path);
     tfiles_[path] = tfile;
@@ -93,7 +100,7 @@ std::shared_ptr<TextureDB> ResourceManager::LoadKFTextures(const std::string& pa
         printf("WARNING: File %d identified as texture but parsing failed.\n", index);
         return nullptr;
     }
-    printf("TextureCount <%i> , NumFiles <%i>\n", textureDB->getTextureCount(), tfile->getNumFiles());
+   
     // 8. Сохраняем в кеш и возвращаем
     kftexture_[cacheKey] = textureDB;
     return textureDB;

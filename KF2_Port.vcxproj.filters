@@ -54,6 +54,9 @@
     <ClInclude Include="TextureDB.h">
       <Filter>Файлы заголовков\core</Filter>
     </ClInclude>
+    <ClInclude Include="soundbank.h">
+      <Filter>Файлы заголовков\core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -69,6 +72,9 @@
       <Filter>Исходные файлы\core</Filter>
     </ClCompile>
     <ClCompile Include="TextureDB.cpp">
+      <Filter>Исходные файлы\core</Filter>
+    </ClCompile>
+    <ClCompile Include="soundbank.cpp">
       <Filter>Исходные файлы\core</Filter>
     </ClCompile>
   </ItemGroup>

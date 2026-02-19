@@ -146,6 +146,7 @@
     <ClCompile Include="GameContext.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ResourceManager.cpp" />
+    <ClCompile Include="soundbank.cpp" />
     <ClCompile Include="TextureDB.cpp" />
     <ClCompile Include="tfile.cpp" />
   </ItemGroup>
@@ -156,6 +157,7 @@
     <ClInclude Include="math.h" />
     <ClInclude Include="object.h" />
     <ClInclude Include="ResourceManager.h" />
+    <ClInclude Include="soundbank.h" />
     <ClInclude Include="structs.h" />
     <ClInclude Include="TextureDB.h" />
     <ClInclude Include="tfile.h" />

@@ -15,7 +15,8 @@ RESET:
     Game::InitProjectileSystem();
     Game::InitEntitySystem();
     Game::InitParticleSystem();
-    Game::LoadGameData();
+    if (!Game::LoadGameData())
+        return RETURN_CODE::ERROR_LOAD_DATA;
     Game::InitPlayerInventory();
 
     Game::g_RecalculateOrientationCache = 1;
@@ -42,7 +43,7 @@ RESET:
         Game::Player_Spawn();
     }
     else
-        return 1;
+        return RETURN_CODE::PRESS_START;
 
     
 
@@ -71,210 +72,174 @@ RESET:
     if (Game::g_NextState == 1)
         goto RESET; 
 
-    return 0;
+    return RETURN_CODE::QUIT;
 }
 
 //MainGameLoop();
 
 
-void UpdateCurrentTexture(const std::shared_ptr<TextureDB>& db,
-    size_t texIndex,
-    Texture2D& outTex)
-{
-    if (!db) return; // Защита от null
-    if (texIndex >= db->getTextureCount()) return; // Защита индекса
-
-    if (outTex.id != 0) UnloadTexture(outTex);
-
-    const auto& kfTex = db->getTexture(texIndex);
-    if (kfTex.image.data != nullptr) {
-        outTex = LoadTextureFromImage(kfTex.image);
-        TraceLog(LOG_INFO, "Switched to sub-texture %zu / %zu",
-            texIndex + 1, db->getTextureCount());
-    }
-}
-
-// Перезагрузить TextureDB для нового файла в архиве
-void ReloadTextureDB(const std::string& archivePath,
-    int targetFileIndex,      // Какой файл из .T архива грузим
-    size_t& outTexIndex,      // Ссылка на текущий индекс текстуры (сбрасываем в 0)
-    std::shared_ptr<TextureDB>& outDB,
-    Texture2D& outRaylibTex)
-{
-    // 1. Очищаем старую GPU текстуру
-    if (outRaylibTex.id != 0) {
-        UnloadTexture(outRaylibTex);
-        outRaylibTex = { 0 };
-    }
-
-    // 2. Загружаем новый DB (используем targetFileIndex!)
-    outDB = ResourceManager::LoadKFTextures(archivePath, targetFileIndex);
-
-    // 3. Сбрасываем индекс под-текстуры на 0, так как открыли новый файл
-    outTexIndex = 0;
-
-    // 4. Если загрузка удалась и там есть текстуры
-    if (outDB && outDB->getTextureCount() > 0) {
-        // Берем ПЕРВУЮ (0) текстуру из нового файла
-        const auto& kfTex = outDB->getTexture(0);
-
-        if (kfTex.image.data != nullptr) {
-            outRaylibTex = LoadTextureFromImage(kfTex.image);
-        }
-
-        TraceLog(LOG_INFO, "Reloaded File #%d: contains %zu textures",
-            targetFileIndex, outDB->getTextureCount());
-    }
-    else {
-        // Если вернулся nullptr, значит это звук, модель или конец файла
-        TraceLog(LOG_WARNING, "File #%d is NOT a texture or is empty", targetFileIndex);
-    }
-}
-
-// Отрисовка кадра (вынесено для чистоты main)
-void DrawFrame(const std::shared_ptr<TextureDB>& db, size_t texIndex,
-    const Texture2D& raylibTex, const std::string& archivePath,
-    int fileIndex, int windowWidth, int windowHeight)
-{
-    BeginDrawing();
-    ClearBackground(GetColor(0x181818FF));
-
-    bool isValidTexture = (db != nullptr) && (db->getTextureCount() > 0) && (raylibTex.id != 0);
-
-    if (isValidTexture) 
-    {
-        const auto& kfTex = db->getTexture(texIndex);
-
-        // Центрирование и масштабирование
-        float texX = (windowWidth - raylibTex.width) / 2.0f;
-        float texY = (windowHeight - raylibTex.height) / 2.0f - 40;
-
-        float scale = 1.0f;
-        if (raylibTex.width > windowWidth - 40 ||
-            raylibTex.height > windowHeight - 120) {
-            float scaleX = (windowWidth - 40) / static_cast<float>(raylibTex.width);
-            float scaleY = (windowHeight - 120) / static_cast<float>(raylibTex.height);
-            scale = fminf(scaleX, scaleY);
-        }
-
-        DrawTextureEx(raylibTex, Vector2{ texX, texY }, 0.0f, scale, WHITE);
-
-        // Инфо-панель
-        DrawRectangle(0, windowHeight - 90, windowWidth, 90, GetColor(0x282828DD));
-
-        DrawText(TextFormat("File: %d | Texture: %zu / %zu",
-            fileIndex, texIndex + 1, db->getTextureCount()),
-            20, windowHeight - 80, 20, WHITE);
-
-        DrawText(TextFormat("Size: %dx%d | VRAM: (%d,%d)",
-            kfTex.pxWidth, kfTex.pxHeight,
-            kfTex.pxVramX, kfTex.pxVramY),
-            20, windowHeight - 55, 16, LIGHTGRAY);
-
-        const char* pModeStr = "Unknown";
-        switch (kfTex.pMode) {
-        case PixelMode::CLUT4Bit:  pModeStr = "CLUT4Bit"; break;
-        case PixelMode::CLUT8Bit:  pModeStr = "CLUT8Bit"; break;
-        case PixelMode::Direct15Bit: pModeStr = "Direct15Bit"; break;
-        case PixelMode::Direct24Bit: pModeStr = "Direct24Bit"; break;
-        case PixelMode::Mixed: pModeStr = "Mixed"; break;
-        }
-        DrawText(TextFormat("Mode: %s | CLUT: %s",
-            pModeStr, kfTex.hasClut ? "Yes" : "No"),
-            20, windowHeight - 35, 16, LIGHTGRAY);
-
-        // Превью палитры
-        if (kfTex.hasClut && !kfTex.clutColorTable.empty()) {
-            DrawText("CLUT:", windowWidth - 180, windowHeight - 80, 14, LIGHTGRAY);
-            int swatchSize = 12;
-            for (int i = 0; i < std::min(static_cast<int>(kfTex.clutColorTable.size()), 16); ++i) {
-                Color c = kfTex.clutColorTable[i];
-                DrawRectangle(windowWidth - 170 + (i % 8) * 14,
-                    windowHeight - 62 + (i / 8) * 14,
-                    swatchSize, swatchSize, c);
-                DrawRectangleLines(windowWidth - 170 + (i % 8) * 14,
-                    windowHeight - 62 + (i / 8) * 14,
-                    swatchSize, swatchSize, DARKGRAY);
-            }
-        }
-    }
-    else {
-        // ОТРИСОВКА, ЕСЛИ ФАЙЛ НЕ ТЕКСТУРА
-        DrawText(TextFormat("File Index: %d", fileIndex), 20, windowHeight - 80, 20, WHITE);
-
-        const char* msg = (db == nullptr) ? "NOT A TEXTURE (Audio/Model)" : "EMPTY TEXTURE DATA";
-        DrawText(msg, windowWidth / 2 - MeasureText(msg, 20) / 2, windowHeight / 2, 20, RED);
-    }
-
-    // Подсказки
-    DrawText("←→/A/D/Wheel: Tex | PgUp/PgDn: File | R:Reload | ESC:Exit",
-        20, 10, 16, GRAY);
-    DrawFPS(windowWidth - 60, 10);
-
-    EndDrawing();
-}
-
 
 int main()
 {
-    // === Инициализация RayLib ===
-    const int windowWidth = 1024;
-    const int windowHeight = 768;
 
-    InitWindow(1024, 768, "KF Texture Viewer");
-    SetTargetFPS(60);
+    Game::LoadGameData();
+    const int screenWidth = 800;
+    const int screenHeight = 450;
 
-    std::string archivePath = "F:/PSX/CHDTOISO-WINDOWS-main/King's Field/CD/COM/RTIM.T";
-    int currentFileIndex = 0;
-    size_t currentTexIndex = 0; // Индекс внутри файла (обычно 0)
+    InitWindow(screenWidth, screenHeight, "KF Sound Tester");
 
-    std::shared_ptr<TextureDB> textureDB;
-    Texture2D currentRaylibTex = { 0 };
-
-    // Первичная загрузка
-    ReloadTextureDB(archivePath, currentFileIndex, currentTexIndex, textureDB, currentRaylibTex);
-
-    while (!WindowShouldClose()) {
-
-        // 1. Навигация внутри файла (если в файле > 1 картинки)
-        if (textureDB && textureDB->getTextureCount() > 1) {
-            bool changed = false;
-            if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
-                currentTexIndex = (currentTexIndex + 1) % textureDB->getTextureCount();
-                changed = true;
-            }
-            if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
-                currentTexIndex = (currentTexIndex == 0) ? textureDB->getTextureCount() - 1 : currentTexIndex - 1;
-                changed = true;
-            }
-            if (changed) {
-                UpdateCurrentTexture(textureDB, currentTexIndex, currentRaylibTex);
-            }
-        }
-
-        // 2. Навигация по файлам архива (0..378)
-        bool fileChanged = false;
-        if (IsKeyPressed(KEY_PAGE_DOWN)) {
-            currentFileIndex++;
-            fileChanged = true;
-        }
-        if (IsKeyPressed(KEY_PAGE_UP)) {
-            if (currentFileIndex > 0) currentFileIndex--;
-            fileChanged = true;
-        }
-        if (IsKeyPressed(KEY_R)) {
-            fileChanged = true;
-        }
-
-        if (fileChanged) {
-            // ВАЖНО: передаем currentTexIndex по ссылке, функция сбросит его в 0
-            ReloadTextureDB(archivePath, currentFileIndex, currentTexIndex, textureDB, currentRaylibTex);
-        }
-
-        DrawFrame(textureDB, currentTexIndex, currentRaylibTex, archivePath, currentFileIndex, GetScreenWidth(), GetScreenHeight());
+    // !!! ОЧЕНЬ ВАЖНО ДЛЯ ЗВУКА !!!
+    InitAudioDevice();
+    if (!IsAudioDeviceReady()) {
+        TraceLog(LOG_ERROR, "Failed to init audio device!");
+        return -1;
     }
 
-    if (currentRaylibTex.id != 0) UnloadTexture(currentRaylibTex);
+    SetTargetFPS(60);
+
+    // 1. Путь к архиву звуков
+    // VAB.T обычно содержит пары: (0=Header, 1=Body), (2=Header, 3=Body) и т.д.
+    std::string archivePath = "F:/PSX/CHDTOISO-WINDOWS-main/King's Field/CD/COM/VAB.T";
+
+    // Индекс пары файлов (Bank Index). 0 означает файлы 0 и 1. 2 означает файлы 2 и 3.
+    int currentBankIndex = 0;
+
+    // Индекс звука внутри текущего банка
+    int currentSoundIndex = 0;
+
+    int OldSoundIndex = 0;
+
+    SoundBank soundBank;
+    bool bankLoaded = false;
+    std::string statusMessage = "Press ENTER to load bank";
+
+    std::string FileName = "VAB";
+
+    // Функция перезагрузки банка
+    auto ReloadBank = [&](int fileIndexVH) {
+        // Проверка на четность (VH всегда четный в VAB.T)
+        if (fileIndexVH % 2 != 0) fileIndexVH--;
+        if (fileIndexVH < 0) fileIndexVH = 0;
+
+        statusMessage = "Loading...";
+
+        // Получаем файлы через ваш ResourceManager
+        // ВАЖНО: убедитесь, что LoadTFile и getFile работают
+        try {
+            auto tFile = ResourceManager::LoadTFile(archivePath);
+            if (!tFile || fileIndexVH + 1 >= tFile->getNumFiles()) 
+            {
+                statusMessage = "Error: Archive end reached";
+                FileName = tFile->getFilename();
+                return;
+            }
+
+            ByteArray& vhData = tFile->getFile(fileIndexVH);
+            ByteArray& vbData = tFile->getFile(fileIndexVH + 1);
+
+            if (soundBank.Load(vhData, vbData)) {
+                bankLoaded = true;
+                currentBankIndex = fileIndexVH;
+                currentSoundIndex = 0;
+                statusMessage = TextFormat("Loaded Bank #%d (Files %d & %d)",
+                    currentBankIndex / 2, fileIndexVH, fileIndexVH + 1);
+            }
+            else {
+                statusMessage = "Error parsing VAB data";
+            }
+        }
+        catch (...) {
+            statusMessage = "Exception loading files";
+        }
+    };
+
+    // Загружаем первый банк при старте
+    ReloadBank(0);
+
+    while (!WindowShouldClose())
+    {
+        // --- УПРАВЛЕНИЕ ---
+
+        // 1. Переключение банков (PageUp / PageDown) - прыгаем через 2 файла
+        if (IsKeyPressed(KEY_PAGE_DOWN))
+        {
+            soundBank.StopAll();
+            ReloadBank(currentBankIndex + 2);
+        }
+        if (IsKeyPressed(KEY_PAGE_UP)) 
+        {
+            soundBank.StopAll();
+            ReloadBank(currentBankIndex - 2);
+        }
+
+        // 2. Переключение звуков (Left / Right)
+        if (bankLoaded && soundBank.GetSoundCount() > 0) 
+        {
+            if (IsKeyPressed(KEY_RIGHT)) 
+            {
+                OldSoundIndex = currentSoundIndex;
+                currentSoundIndex++;
+                if (currentSoundIndex >= soundBank.GetSoundCount())
+                {
+                    currentSoundIndex = 0;
+                    OldSoundIndex = currentSoundIndex;
+                }
+                soundBank.StopAll();
+                soundBank.Play(currentSoundIndex); // Авто-проигрывание при смене
+            }
+            if (IsKeyPressed(KEY_LEFT)) 
+            {
+                OldSoundIndex = currentSoundIndex;
+                currentSoundIndex--;
+                if (currentSoundIndex < 0)
+                {
+                    OldSoundIndex = currentSoundIndex;
+                    currentSoundIndex = (int)soundBank.GetSoundCount() - 1;
+                }
+                soundBank.StopAll();
+                soundBank.Play(currentSoundIndex);
+            }
+
+            // 3. Проигрывание (Space / Enter)
+            if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) 
+            {
+                if (soundBank.IsPlayering(currentSoundIndex))
+                    soundBank.StopAll();
+                else
+                    soundBank.Play(currentSoundIndex);
+            }
+        }
+
+        // --- ОТРИСОВКА ---
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+
+        DrawText("King's Field VAB Player", 10, 10, 20, DARKGRAY);
+        DrawText(statusMessage.c_str(), 10, 40, 20, bankLoaded ? DARKGREEN : RED);
+
+        if (bankLoaded) {
+            DrawText(TextFormat("Current Bank (Files): %d & %d | %s", currentBankIndex, currentBankIndex + 1, FileName.c_str()), 10, 80, 20, BLACK);
+            DrawText(TextFormat("Total Sounds: %zu", soundBank.GetSoundCount()), 10, 110, 20, BLACK);
+
+            DrawRectangle(10, 150, 780, 100, LIGHTGRAY);
+            DrawText(TextFormat("SOUND: %d", currentSoundIndex), 30, 170, 40, MAROON);
+
+            DrawText("Controls:", 10, 300, 20, DARKGRAY);
+            DrawText("- Left / Right : Select Sound (+Auto Play)", 30, 330, 18, GRAY);
+            DrawText("- Space : Play Current Sound Again", 30, 350, 18, GRAY);
+            DrawText("- PageUp / PageDn : Next/Prev Bank (File Pair)", 30, 370, 18, GRAY);
+        }
+        else {
+            DrawText("No bank loaded or file error.", 10, 100, 20, RED);
+        }
+
+        EndDrawing();
+    }
+
+    // Очистка
+ //   soundBank.UnloadAll();
+    CloseAudioDevice();
     CloseWindow();
+
     return 0;
 }

@@ -33,4 +33,35 @@ namespace MATH
         out.push_back((val >> 16) & 0xFF);
         out.push_back((val >> 24) & 0xFF);
     }
+
+    static int16_t Clamp16(int32_t val) {
+        if (val > 32767) return 32767;
+        if (val < -32768) return -32768;
+        return static_cast<int16_t>(val);
+    }
+
+    template<typename T>
+    struct PSXVectorTemplate
+    {
+        T vx;
+        T vy;
+        T vz;
+        T pad;
+    };
+
+    using SVECTOR = PSXVectorTemplate<int16_t>;
+    using VECTOR = PSXVectorTemplate<int32_t>;
+
+
+    template<typename in = int32_t>
+    inline constexpr float fromAngle(in x)
+    {
+        return x * FixedToFloat(360);
+    }
+
+    template<typename out = int32_t>
+    inline constexpr out toAngle(float x)
+    {
+        return static_cast<out>(x / FixedToFloat(360));
+    }
 }
