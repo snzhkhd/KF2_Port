@@ -143,7 +143,24 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="GameContext.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="ResourceManager.cpp" />
+    <ClCompile Include="TextureDB.cpp" />
+    <ClCompile Include="tfile.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="enums.h" />
+    <ClInclude Include="Entity.h" />
+    <ClInclude Include="GameContext.h" />
+    <ClInclude Include="math.h" />
+    <ClInclude Include="object.h" />
+    <ClInclude Include="ResourceManager.h" />
+    <ClInclude Include="structs.h" />
+    <ClInclude Include="TextureDB.h" />
+    <ClInclude Include="tfile.h" />
+    <ClInclude Include="types.h" />
+    <ClInclude Include="utilities.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
