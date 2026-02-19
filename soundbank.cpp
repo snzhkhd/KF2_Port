@@ -157,34 +157,53 @@ void AudioSystem::Update()
 
 void AudioSystem::PlaySample(int program, float note, float volume, int channel)
 {
-    if (program < 0 || program >= 128)
-    {
-        printf("program < 0 or > 128\n");
-        return;
-    }
+    if (program < 0 || program >= 128) return;
     Program& prog = programs[program];
 
-    for (int i = 0; i < prog.toneCount; i++) {
-        Tone& tone = prog.tones[i];
-        // Проверяем, попадает ли MIDI-нота в диапазон этого сэмпла
+    if (prog.toneCount == 0) return;
+
+    const Tone* bestTone = nullptr;
+
+    // 1. Сначала ищем ТОЧНОЕ попадание в диапазон
+    for (int i = 0; i < prog.toneCount; ++i) {
+        const Tone& tone = prog.tones[i];
         if (note >= tone.minNote && note <= tone.maxNote) {
-
-            // 1. Считаем общее смещение в полутонах
-            // fineTune / 128.0f — это стандарт PS1 для точной подстройки
-            float semitones = (note - (float)tone.centerNote) + ((float)tone.fineTune / 128.0f);
-
-            // 2. Рассчитываем множитель скорости (Pitch)
-            float basePitch = powf(2.0f, semitones / 12.0f);
-
-            // 3. Учет Pitch Bend (событие 0xE0)
-            float bend = channelBends[channel];
-            float finalPitch = basePitch * powf(2.0f, (bend * 2.0f) / 12.0f); // 2.0f = range
-
-            // Отправляем в SPU (volume * 0.4f чтобы не хрипело)
-            //float finalVol = volume * ((float)tone.vol / 127.0f) * 0.5f;
-            spu.PlayNote(&tone, finalPitch, volume * 0.4f, true, 0.5f, (int)note, program);
-           // return;
+            bestTone = &tone;
+            break;
         }
+    }
+
+    // 2. Если точного нет — ищем БЛИЖАЙШИЙ по Center Note
+    // (Это спасет ноты типа 36, если есть только диапазон 64-110)
+    if (!bestTone) {
+        int minDiff = 1000;
+        for (int i = 0; i < prog.toneCount; ++i) {
+            const Tone& tone = prog.tones[i];
+            int diff = abs((int)note - (int)tone.centerNote);
+            if (diff < minDiff) {
+                minDiff = diff;
+                bestTone = &tone;
+            }
+        }
+    }
+
+    // 3. Играем
+    if (bestTone && !bestTone->data.empty()) {
+
+        // Стандартная формула MIDI (без лишних множителей!)
+        float shift = (note - (float)bestTone->centerNote) + ((float)bestTone->fineTune / 128.0f);
+        float pitch = powf(2.0f, shift / 12.0f);
+
+        // Защита от экстремальных значений (чтобы SPU не крашнулся)
+        if (pitch < 0.1f) pitch = 0.1f;
+        if (pitch > 4.0f) pitch = 4.0f;
+
+        // Коррекция громкости (чтобы не хрипело при наложении)
+        float finalVol = volume * ((float)bestTone->vol / 127.0f) * 0.7f;
+
+        // Запуск
+        // Передаем false (не FM) и 0.5f (центр панорамы, если пока нет поддержки панорамы из SEQ)
+        spu.PlayNote(bestTone, pitch, finalVol, true, 0.5f, (int)note, program);
     }
 }
 
@@ -261,6 +280,10 @@ bool AudioSystem::LoadVab(const ByteArray& vhData, const ByteArray& vbData)
                 uint8_t n2 = toneData[3];
                 tone.minNote = (n1 < n2) ? n1 : n2;
                 tone.maxNote = (n1 > n2) ? n1 : n2;
+                // Если в KF min > max (например 127 и 0), меняем их местами
+                if (tone.minNote > tone.maxNote) std::swap(tone.minNote, tone.maxNote);
+
+                // Если 0 и 0 (или 0 и 127), ставим полный диапазон
                 if (tone.maxNote == 0) tone.maxNote = 127;
 
                 tone.centerNote = toneData[4];
@@ -290,17 +313,7 @@ bool AudioSystem::LoadVab(const ByteArray& vhData, const ByteArray& vbData)
                 // Sustain Level: 4 бита (0..15). 15 = Max Volume.
                 // ВАЖНО: Если sl=0, звук исчезнет после decay!
                 tone.sustain = (float)sl / 15.0f;
-                // Защита от полной тишины, если KF использует хитрые настройки
-                /*if (tone.sustain < 0.1f)
-                {
-                    tone.sustain = 0.5f;
-                    TraceLog(LOG_WARNING, "tone.sustain < 0.1f!");
-                }
-                if (tone.decay < 0.1f)
-                {
-                    tone.decay = 0.5f;
-                    TraceLog(LOG_WARNING, "tone.decay < 0.1f!");
-                }*/
+
                 // Release: Чем больше, тем быстрее.
                 tone.release = (float)(31 - rr) * 0.05f;
                 if (tone.release < 0.05f) tone.release = 0.05f; // Мин. релиз

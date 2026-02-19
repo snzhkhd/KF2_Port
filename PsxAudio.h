@@ -8,8 +8,8 @@
 #include <cstdio>
 #include <map>
 
-const int SPU_VOICES_COUNT = 256;//127;
-const int SFX_VOICE_LIMIT = 256;//128; // 0..19 для эффектов, 20..23 для музыки/лупов
+const int SPU_VOICES_COUNT = 127;//127;
+const int SFX_VOICE_LIMIT = 128;//128; // 0..19 для эффектов, 20..23 для музыки/лупов
 
 const int SPU_SAMPLE_RATE = 44100;
 const int MAX_AUDIO_BUFFER = 8192;
@@ -22,10 +22,10 @@ enum class InstrumentType { Synth, Sample };
 
 struct AdsrSettings 
 {
-    float attack = 0.01f;
-    float decay = 0.2f;
+    float attack = 0.001f;
+    float decay = 0.5f;
     float sustain = 0.5f;
-    float release = 0.3f;
+    float release = 1.0f;
 };
 
 
@@ -50,9 +50,12 @@ struct Tone {
     uint8_t vol = 127;
     int8_t fineTune = 0;
     // ADSR
-    float attack, decay, sustain, release;
+    float attack = 0.001f;
+    float decay = 0.5f;
+    float sustain = 0.5f;
+    float release = 1.0f;
 
-    InstrumentType type;
+    InstrumentType type = InstrumentType::Sample;
     bool loop = false;
 };
 
@@ -156,7 +159,7 @@ public:
             break;
         case ADSR_DECAY:
             target = adsr.sustain;
-            rate = 1.0f / (adsr.decay + 0.001f);
+            rate = 5.0f / (adsr.decay + 0.001f);
             currentEnvelopeVal += (target - currentEnvelopeVal) * rate * dt;
             if (fabs(currentEnvelopeVal - target) < 0.01f) {
                 currentEnvelopeVal = target;
@@ -253,31 +256,31 @@ public:
                 // i1 (текущий)
                 if (i1 >= len) i1 = len - 1;
 
-                //if (instrument->loop) {
-                //    // ПРАВИЛЬНОЕ ЗАЦИКЛИВАНИЕ ДЛЯ КУБИКИ
-                //    if (i0 < 0) i0 = len - 1;
-                //    i1 %= len;
-                //    i2 %= len;
-                //    i3 %= len;
-                //}
-                //else {
-                //    // КЛАМПИНГ ДЛЯ ОДИНОЧНЫХ ЗВУКОВ
-                //    if (i0 < 0) i0 = 0;
-                //    if (i1 >= len) i1 = len - 1;
-                //    if (i2 >= len) i2 = len - 1;
-                //    if (i3 >= len) i3 = len - 1;
-                //}
-                 //i2 (следующий) и i3 (через один)
                 if (instrument->loop) {
-                    // ЕСЛИ ЗАЦИКЛЕНО: берем данные из НАЧАЛА массива
-                    if (i2 >= len) i2 %= len;
-                    if (i3 >= len) i3 %= len;
+                    // ПРАВИЛЬНОЕ ЗАЦИКЛИВАНИЕ ДЛЯ КУБИКИ
+                    if (i0 < 0) i0 = len - 1;
+                    i1 %= len;
+                    i2 %= len;
+                    i3 %= len;
                 }
                 else {
-                    // ЕСЛИ НЕ ЗАЦИКЛЕНО: удерживаем последний сэмпл
+                    // КЛАМПИНГ ДЛЯ ОДИНОЧНЫХ ЗВУКОВ
+                    if (i0 < 0) i0 = 0;
+                    if (i1 >= len) i1 = len - 1;
                     if (i2 >= len) i2 = len - 1;
                     if (i3 >= len) i3 = len - 1;
                 }
+                 //i2 (следующий) и i3 (через один)
+                //if (instrument->loop) {
+                //    // ЕСЛИ ЗАЦИКЛЕНО: берем данные из НАЧАЛА массива
+                //    if (i2 >= len) i2 %= len;
+                //    if (i3 >= len) i3 %= len;
+                //}
+                //else {
+                //    // ЕСЛИ НЕ ЗАЦИКЛЕНО: удерживаем последний сэмпл
+                //    if (i2 >= len) i2 = len - 1;
+                //    if (i3 >= len) i3 = len - 1;
+                //}
             }
             else {
                 // Для синтезатора крутим по кругу
@@ -335,10 +338,10 @@ public:
     AudioStream stream;
     float* reverbBuffer;
     int reverbCursor = 0, reverbSize = 0;
-    float masterVolume = 0.7f;
+    float masterVolume = 0.75f;
     float reverbMix = 0.01f;
-    float reverbDecay = 0.1f; // PS1 reverb was quite long
-    int currentBufferSize = 1024;
+    float reverbDecay = 0.01f; // PS1 reverb was quite long
+    int currentBufferSize = 1024;//1024;
     int currentVoiceIndex = 0;
 
     // Массив флагов: включен ли FM для голоса N (модулируется ли он голосом N-1)
@@ -487,10 +490,10 @@ public:
                 reverbBuffer[reverbCursor * 2 + 1] = fR * reverbDecay;
                 reverbCursor = (reverbCursor + 1) % reverbSize;
                 fL = tanhf(fL * masterVolume); fR = tanhf(fR * masterVolume);
-                /*pcmBuffer[i * 2] = (short)(fL * 32000); 
-                pcmBuffer[i * 2 + 1] = (short)(fR * 32000);*/
-                pcmBuffer[i * 2] = (short)(fL * 24000);
-                pcmBuffer[i * 2 + 1] = (short)(fR * 24000);
+                pcmBuffer[i * 2] = (short)(fL * 32000); 
+                pcmBuffer[i * 2 + 1] = (short)(fR * 32000);
+               /* pcmBuffer[i * 2] = (short)(fL * 24000);
+                pcmBuffer[i * 2 + 1] = (short)(fR * 24000);*/
             }
             UpdateAudioStream(stream, pcmBuffer, frames);
         }
