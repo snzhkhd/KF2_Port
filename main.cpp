@@ -108,112 +108,56 @@ int main()
 
     InitWindow(screenWidth, screenHeight, "KF Sound Tester");
 
-    // !!! ОЧЕНЬ ВАЖНО ДЛЯ ЗВУКА !!!
-    InitAudioDevice();
-    if (!IsAudioDeviceReady()) {
-        TraceLog(LOG_ERROR, "Failed to init audio device!");
-        return -1;
-    }
 
+    AudioSystem audio;
+
+    audio.InitSPUSystem();
     SetTargetFPS(60);
 
     // 1. Путь к архиву звуков
     // VAB.T обычно содержит пары: (0=Header, 1=Body), (2=Header, 3=Body) и т.д.
-    std::string archivePath = "F:/PSX/CHDTOISO-WINDOWS-main/King's Field/CD/COM/VAB.T"; //Western Shore Sequence ?
-    auto tFile = ResourceManager::LoadTFile(archivePath);
+    //std::string archivePath = "F:/PSX/CHDTOISO-WINDOWS-main/King's Field/CD/COM/VAB.T"; //Western Shore Sequence ?
+    //auto tFile = ResourceManager::LoadTFile(archivePath);
 
-    AudioSystem audio;
+    int currentSeqIdx = 0;
 
-    int currentSeqIdx = 112;
 
-    VabPair pair;
-    pair.vh = 2;
-    pair.vb = 3;
-    auto LoadTrack = [&](int seqIdx) {
-        if (seqIdx < 0 || seqIdx >= tFile->getNumFiles()) return;
-
+    auto LoadTrack = [&]() 
+    {
         // 1. Останавливаем всё старое
         audio.UnloadAll();
+        if (currentSeqIdx < 0)
+            currentSeqIdx = 8;
+        else if (currentSeqIdx > 8)
+            currentSeqIdx = 0;
 
-        if (pair.vh != -1 && pair.vb != -1) {
-            TraceLog(LOG_INFO, "Loading VAB for SEQ %d: VH=%d, VB=%d", seqIdx, pair.vh, pair.vb);
-            audio.LoadVab(tFile->getFile(pair.vh), tFile->getFile(pair.vb));
-        }
-        else {
-            // Если рядом ничего нет, пробуем загрузить глобальный банк (T0 и T1)
-            audio.LoadVab(tFile->getFile(0), tFile->getFile(1));
-        }
-
-        // 3. Запускаем музыку
-        audio.PlayMusic(tFile->getFile(seqIdx));
+        audio.PlaySEQMusic(currentSeqIdx);
     };
 
-    if (currentSeqIdx != -1) LoadTrack(currentSeqIdx);
-
+    LoadTrack();
     while (!WindowShouldClose()) 
     {
 
-        if (IsKeyPressed(KEY_UP)) {
-            // Ищем предыдущий VH выше по списку
-            for (int i = pair.vh - 1; i >= 0; i--) {
-                if (tFile->getEType(tFile->getFile(i)) == FTYPE::VH) {
-                    pair.vh = i;
-                    pair.vb = i + 1;
-                    audio.LoadVab(tFile->getFile(pair.vh), tFile->getFile(pair.vb));
-                    // Перезапускаем текущую музыку с новыми инструментами
-                    audio.PlayMusic(tFile->getFile(currentSeqIdx));
-                    break;
-                }
-            }
+        if (IsKeyPressed(KEY_UP)) 
+        {
+            currentSeqIdx--;
+            LoadTrack();
         }
-        if (IsKeyPressed(KEY_DOWN)) {
-            // Ищем предыдущий VH выше по списку
-            for (int i = pair.vh +1; i >= 0; i++) {
-                if (tFile->getEType(tFile->getFile(i)) == FTYPE::VH) {
-                    pair.vh = i;
-                    pair.vb = i + 1;
-                    audio.LoadVab(tFile->getFile(pair.vh), tFile->getFile(pair.vb));
-                    // Перезапускаем текущую музыку с новыми инструментами
-                    audio.PlayMusic(tFile->getFile(currentSeqIdx));
-                    break;
-                }
-            }
+        if (IsKeyPressed(KEY_DOWN)) 
+        {
+            currentSeqIdx++;
+            LoadTrack();
         }
-
-        // Управление: листаем сиквенсы
-        if (IsKeyPressed(KEY_PAGE_DOWN)) {
-            // Ищем следующий файл типа SEQ
-            for (int i = currentSeqIdx + 1; i < tFile->getNumFiles(); i++) {
-                if (tFile->getEType(tFile->getFile(i)) == FTYPE::SEQ) {
-                    currentSeqIdx = i;
-                    LoadTrack(currentSeqIdx);
-                    break;
-                }
-            }
-        }
-        if (IsKeyPressed(KEY_PAGE_UP)) {
-            // Ищем предыдущий файл типа SEQ
-            for (int i = currentSeqIdx - 1; i >= 0; i--) {
-                if (tFile->getEType(tFile->getFile(i)) == FTYPE::SEQ) {
-                    currentSeqIdx = i;
-                    LoadTrack(currentSeqIdx);
-                    break;
-                }
-            }
-        }
-        
-
-
-
-
         audio.Update();
+
+     
 
         BeginDrawing();
         ClearBackground(GetColor(0x181818FF));
 
         DrawText("King's Field Music Player", 20, 20, 20, LIGHTGRAY);
 
-        DrawText(TextFormat("Current SEQ: %d | VH <%i> VB <%i>", currentSeqIdx, pair.vh, pair.vb), 20, 60, 30, GREEN);
+        DrawText(TextFormat("Current SEQ: %d | VH <%i> VB <%i>", currentSeqIdx+1, audio.music[currentSeqIdx].pair.vh, audio.music[currentSeqIdx].pair.vb), 20, 60, 30, GREEN);
         DrawText("Use PgUp / PgDn to change tracks", 20, 100, 20, GRAY);
 
         // Визуализация (какие инструменты сейчас активны)

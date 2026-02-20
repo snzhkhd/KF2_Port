@@ -39,7 +39,7 @@ void Game::InitParticleSystem()
 
 bool Game::LoadGameData()
 {
-    if (g_LanguageID >= 0 && g_LanguageID <= 2)
+    if (g_LanguageID < 0 || g_LanguageID > 2)
     {
         TraceLog(LOG_ERROR, "Game::LoadGameData, LanguageID is out of range");
         return false;

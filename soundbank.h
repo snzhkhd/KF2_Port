@@ -11,6 +11,7 @@ struct SeqSlot {
     uint32_t dataSize = 0;
     uint32_t currentPos = 0;        // Текущий байт в файле SEQ
 
+    float masterVolFactor = 1.0f;
     // Тайминги
     uint32_t waitTicks = 0;         // Сколько тиков ждем до следующего события
     float    tickAccumulator = 0.0f; // Накопитель времени (дробные тики)
@@ -24,6 +25,7 @@ struct SeqSlot {
         uint8_t volume = 127;
         uint8_t pan = 64;
         uint8_t program = 0;        // Текущий инструмент (номер звука в VAB)
+        uint8_t expression = 127;        // Текущий инструмент (номер звука в VAB)
     } channels[16];
 };
 
@@ -53,7 +55,6 @@ public:
 
     int FindFreeSlot();
 
-    void SetVolume(int slotIdx, uint8_t left, uint8_t right);
 private:
     SeqSlot slots[16];
     bool ParseNextEvent(SeqSlot& s, class AudioSystem* system);
@@ -65,6 +66,7 @@ public:
     AudioSystem();
     ~AudioSystem();
 
+    void InitSPUSystem();
     // Загрузить пару файлов (VH - заголовок, VB - данные)
     bool Load(const ByteArray& vhData, const ByteArray& vbData);
 
@@ -75,10 +77,10 @@ public:
 
 
     void PlaySfx(int index, float volume = 1.0f, float pitch = 1.0f);
-    int PlayMusic(const ByteArray& seqData);
+    
     void Update();
     // Вспомогательный метод для плеера SEQ
-    void PlaySample(int program, float note, float volume, int channel);
+    void PlaySample(int program, float note, float volume, float pan, int channel);
     bool IsProgramReady(int program);
 
     void Play(int index);
@@ -98,8 +100,16 @@ public:
     MusicMap music[9];
 
     void SetPitchBend(int channel, float bend);
-private:
 
+    void PlaySEQMusic(int id);
+
+    float currentVabMasterVol = 0.75f;
+private:
+    int CurrentSeqId = 0;
+    
+    
+
+    int PlayMusic(const ByteArray& seqData);
     PsxSpu spu;
 
     Program programs[128];

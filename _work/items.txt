@@ -1,0 +1,5 @@
+264 ABrokenSword
+141 ASoldierOfVerdite
+46 ArmsA
+44 ArmsDemonsHands
+71 ItemBloodStone

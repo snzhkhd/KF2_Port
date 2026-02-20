@@ -1,4 +1,4 @@
-#include "soundbank.h"
+#include "ResourceManager.h"
 #include <cstring>
 #include <cmath>
 #include <iostream>
@@ -36,6 +36,34 @@ AudioSystem::~AudioSystem()
 	}
 
 }
+
+void AudioSystem::InitSPUSystem()
+{
+    InitAudioDevice();
+    if (!IsAudioDeviceReady()) {
+        TraceLog(LOG_ERROR, "Failed to init audio device!");
+        return;
+    }
+    spu.InitAudioSystem(1024);
+}
+
+void AudioSystem::PlaySEQMusic(int id)
+{
+    CurrentSeqId = id;
+    if (id < 0)
+        id = 8;
+    else if (id > 8)
+        id = 0;
+    std::string archivePath = "F:/PSX/CHDTOISO-WINDOWS-main/King's Field/CD/COM/VAB.T";
+
+    auto tFile = ResourceManager::LoadTFile(archivePath);
+
+    LoadVab(tFile->getFile(music[id].pair.vh), tFile->getFile(music[id].pair.vb));
+
+    // 3. Запускаем музыку
+    PlayMusic(tFile->getFile(music[id].SeqId));
+}
+
 
 bool AudioSystem::Load(const ByteArray& vhData, const ByteArray& vbData)
 {
@@ -146,64 +174,32 @@ void AudioSystem::PlaySfx(int index, float volume, float pitch)
 
 int AudioSystem::PlayMusic(const ByteArray& seqData)
 {
+    
     return seqPlayer.Play(seqData, 0);
 }
 
 void AudioSystem::Update()
 {
     seqPlayer.Update(GetFrameTime(), this);
-    spu.Update();
 }
 
-void AudioSystem::PlaySample(int program, float note, float volume, int channel)
+void AudioSystem::PlaySample(int program, float note, float volume, float pan, int channel)
 {
     if (program < 0 || program >= 128) return;
     Program& prog = programs[program];
 
-    if (prog.toneCount == 0) return;
-
-    const Tone* bestTone = nullptr;
-
-    // 1. Сначала ищем ТОЧНОЕ попадание в диапазон
+    // Играем ВСЕ тона, которые подходят под эту ноту
     for (int i = 0; i < prog.toneCount; ++i) {
         const Tone& tone = prog.tones[i];
         if (note >= tone.minNote && note <= tone.maxNote) {
-            bestTone = &tone;
-            break;
+            float shift = (note - (float)tone.centerNote) + ((float)tone.fineTune / 128.0f);
+            float pitch = powf(2.0f, shift / 12.0f);
+
+            // Используем громкость конкретного тона
+            float finalVol = volume * ((float)tone.vol / 127.0f) * 0.7f;
+
+            spu.PlayNote(&tone, pitch, finalVol, false, pan, (int)note, program);
         }
-    }
-
-    // 2. Если точного нет — ищем БЛИЖАЙШИЙ по Center Note
-    // (Это спасет ноты типа 36, если есть только диапазон 64-110)
-    if (!bestTone) {
-        int minDiff = 1000;
-        for (int i = 0; i < prog.toneCount; ++i) {
-            const Tone& tone = prog.tones[i];
-            int diff = abs((int)note - (int)tone.centerNote);
-            if (diff < minDiff) {
-                minDiff = diff;
-                bestTone = &tone;
-            }
-        }
-    }
-
-    // 3. Играем
-    if (bestTone && !bestTone->data.empty()) {
-
-        // Стандартная формула MIDI (без лишних множителей!)
-        float shift = (note - (float)bestTone->centerNote) + ((float)bestTone->fineTune / 128.0f);
-        float pitch = powf(2.0f, shift / 12.0f);
-
-        // Защита от экстремальных значений (чтобы SPU не крашнулся)
-        if (pitch < 0.1f) pitch = 0.1f;
-        if (pitch > 4.0f) pitch = 4.0f;
-
-        // Коррекция громкости (чтобы не хрипело при наложении)
-        float finalVol = volume * ((float)bestTone->vol / 127.0f) * 0.7f;
-
-        // Запуск
-        // Передаем false (не FM) и 0.5f (центр панорамы, если пока нет поддержки панорамы из SEQ)
-        spu.PlayNote(bestTone, pitch, finalVol, true, 0.5f, (int)note, program);
     }
 }
 
@@ -243,6 +239,11 @@ bool AudioSystem::LoadVab(const ByteArray& vhData, const ByteArray& vbData)
         currentOffset += vagSize;
     }
 
+    uint8_t vabMainVol = vhData[24];
+    this->currentVabMasterVol = (float)vabMainVol / 127.0f;
+
+    
+
     // --- ЭТАП 2: МАППИНГ (Sony libsnd Standard) ---
     const uint8_t* progAttrPtr = vhData.data() + 32;
     const uint8_t* toneAttrPtr = vhData.data() + 2080;
@@ -252,32 +253,36 @@ bool AudioSystem::LoadVab(const ByteArray& vhData, const ByteArray& vbData)
         uint8_t numTones = progAttrPtr[p * 16];
         if (numTones == 0) continue;
 
+        uint8_t progVol = progAttrPtr[p * 16 + 1];
+
         const uint8_t* toneGroup = toneAttrPtr + (p * 512);
         int added = 0;
-        for (int t = 0; t < 16; t++) { // В KF всегда 16 слотов
+        for (int t = 0; t < 16; t++) 
+        { 
             const uint8_t* toneData = toneGroup + (t * 32);
             uint16_t vagID = *reinterpret_cast<const uint16_t*>(toneData + 22);
 
-            // vagID 0 в VAB — это "нет звука", 1 — это первый сэмпл (index 0)
-           // if (vagID > 0 && (vagID - 1) < allSamples.size() && !allSamples[vagID - 1].empty()) 
             if (vagID -1 < allSamples.size() && !allSamples[vagID].empty())
             {
                 Tone& tone = programs[p].tones[added];
                 tone.data = allSamples[vagID -1];
+                
                 tone.sampleCount = (uint32_t)tone.data.size();
                 tone.type = InstrumentType::Sample;
                 tone.loop = false;
 
-               /* tone.vol = toneData[0];
+                uint8_t toneVol = toneData[2];
+                float volFactor = ((float)progVol / 127.0f) * ((float)toneVol / 127.0f);
+                tone.vol = (uint8_t)(volFactor * 127.0f);
                 if (tone.vol == 0)
                 {
-                    tone.vol = 100;
-                    TraceLog(LOG_WARNING, "tone.vol = 0!");
-                }*/
+                    TraceLog(LOG_WARNING, "tone vol = 0!  set 100");
+                    tone.vol = 100; // Защита
+                }
 
                 // Важно: в KF min/max могут быть перепутаны
-                uint8_t n1 = toneData[2];
-                uint8_t n2 = toneData[3];
+                uint8_t n1 = toneData[6];
+                uint8_t n2 = toneData[7];
                 tone.minNote = (n1 < n2) ? n1 : n2;
                 tone.maxNote = (n1 > n2) ? n1 : n2;
                 // Если в KF min > max (например 127 и 0), меняем их местами
@@ -290,34 +295,19 @@ bool AudioSystem::LoadVab(const ByteArray& vhData, const ByteArray& vbData)
                 if (tone.centerNote == 0) tone.centerNote = 60;
                 tone.fineTune = (int8_t)toneData[5];
 
-                uint16_t adsr1 = *reinterpret_cast<const uint16_t*>(toneData + 12);
-                uint16_t adsr2 = *reinterpret_cast<const uint16_t*>(toneData + 14);
 
-                // Расшифровка (PS1 SPU Spec)
-                // ADSR1: [Bit 15: Mode] [14-8: Attack Rate] [7-4: Decay Rate] [3-0: Sustain Level]
-                int ar = (adsr1 >> 8) & 0x7F;
-                int dr = (adsr1 >> 4) & 0x0F;
-                int sl = (adsr1 & 0x0F);
+                uint16_t ADSR1 = *reinterpret_cast<const uint16_t*>(toneData + 16);
+                uint16_t ADSR2 = *reinterpret_cast<const uint16_t*>(toneData + 18);
 
-                // ADSR2: [15-6: Sustain Rate] [5: Mode] [4-0: Release Rate]
-                int sr = (adsr2 >> 6) & 0x7F;
-                int rr = (adsr2 & 0x1F);
+                AdsrSettings asdr = spu.MakeADSR(ADSR1, ADSR2);
 
-                // Конверсия в секунды для SpuVoice
-                // Attack: чем больше ar, тем быстрее (0x7F = мгновенно)
-                tone.attack = (ar == 127) ? 0.0f : (float)(127 - ar) * 0.005f;
+                tone.attack = asdr.attack;  // 5мс (быстро)
+                tone.decay = asdr.decay;     // Неважно
+                tone.sustain = asdr.sustain;   // Полная громкость
+                tone.release = asdr.release;   // Средний хвост
 
-                // Decay: 4 бита. Чем больше, тем быстрее.
-                tone.decay = (float)(15 - dr) * 0.02f;
 
-                // Sustain Level: 4 бита (0..15). 15 = Max Volume.
-                // ВАЖНО: Если sl=0, звук исчезнет после decay!
-                tone.sustain = (float)sl / 15.0f;
-
-                // Release: Чем больше, тем быстрее.
-                tone.release = (float)(31 - rr) * 0.05f;
-                if (tone.release < 0.05f) tone.release = 0.05f; // Мин. релиз
-
+               // printf("a <%f> | d <%f> | s <%f> r | <%f>\n", tone.attack, tone.decay, tone.sustain, tone.release);
                 added++;
             }
         }
@@ -439,9 +429,9 @@ std::vector<int16_t> AudioSystem::DecodeADPCM(const uint8_t* src, size_t size)
         // Проверяем флаг конца (Bit 0)
         // Если флаг == 1 (Loop End) или 3 (Loop End + Loop Start), мы должны остановиться,
         // если это не зацикленный звук. Для простого плеера лучше останавливаться всегда.
-        //if ((flags & 1) != 0) {
-        //    break; // Звук закончился, выходим из цикла
-        //}
+        if ((flags & 1) != 0) {
+            break; // Звук закончился, выходим из цикла
+        }
     }
 
     return buffer;
@@ -547,20 +537,6 @@ SeqPlayer::SeqPlayer()
 }
 
 
-
-void SeqPlayer::SetVolume(int slotIdx, uint8_t left, uint8_t right)
-{
-    //if (slotIdx < 0 || slotIdx >= 16) return;
-
-    //// Ограничение как в sub_80057C6C
-    //if (left > MAX_PSX_VOLUME) left = MAX_PSX_VOLUME;
-    //if (right > MAX_PSX_VOLUME) right = MAX_PSX_VOLUME;
-
-    //slots[slotIdx].masterVolumeLeft = left;
-    //slots[slotIdx].masterVolumeRight = right;
-}
-
-
 void SeqPlayer::Update(float deltaTime, AudioSystem* system)
 {
     for (int i = 0; i < 16; ++i) {
@@ -576,7 +552,7 @@ void SeqPlayer::Update(float deltaTime, AudioSystem* system)
             s.tickAccumulator -= (float)s.waitTicks;
             if (!ParseNextEvent(s, system)) {
                 s.active = false;
-                break;
+            //    break;
             }
             // ParseNextEvent уже прочитал новый waitTicks в конце.
             // Если он 0, цикл выполнится снова мгновенно.
@@ -606,7 +582,6 @@ int SeqPlayer::Play(const ByteArray& data, uint16_t vabID)
 
     SeqSlot& s = slots[slotIdx];
 
-    // --- ОБЯЗАТЕЛЬНО ВЕРНИТЕ ЭТО ---
     s.pData = data.data();
     s.dataSize = (uint32_t)data.size();
     s.vabID = vabID;
@@ -630,9 +605,14 @@ int SeqPlayer::Play(const ByteArray& data, uint16_t vabID)
     s.active = true;
     s.tickAccumulator = 0;
 
+    uint8_t seqMasterVol = data[13]; // Обычно здесь мастер-громкость
+    s.masterVolFactor = (float)seqMasterVol / 127.0f;
+    if (s.masterVolFactor <= 0) s.masterVolFactor = 1.0f;
+
+    
     // Теперь pData не пустой, и ReadVLQ сработает!
     s.waitTicks = ReadVLQ(s.pData, s.currentPos, s.dataSize);
-
+    //printf("masterVolFactor <%f>  \t\r", s.masterVolFactor);
     //TraceLog(LOG_INFO, "SEQ Started: %d bytes, Resolution=%d", s.dataSize, s.resolution);
 
     return slotIdx;
@@ -661,9 +641,20 @@ bool SeqPlayer::ParseNextEvent(SeqSlot& s, AudioSystem* system)
     if (event == 0x90) { // Note On
         uint8_t note = s.pData[s.currentPos++];
         uint8_t velocity = s.pData[s.currentPos++];
-        if (velocity > 0) {
-            system->PlaySample(s.channels[chan].program, (float)note, (float)velocity / 127.0f, chan);
+        if (velocity > 0) 
+        {
+            uint8_t rawPan = s.channels[chan].pan;
+
+            // 2. Переводим в float (0.0 - лево, 1.0 - право)
+            float pan = (float)rawPan / 127.0f;
+            float vol = ((float)velocity / 127.0f) *
+                ((float)s.channels[chan].volume / 127.0f) *
+                ((float)s.channels[chan].expression / 127.0f)
+                    * system->currentVabMasterVol;
+            system->PlaySample(s.channels[chan].program, (float)note, vol, pan, chan);
         }
+        else
+            system->NoteOff(s.channels[chan].program, note);
     }
     else if (event == 0x80)
     { // Note Off
@@ -677,7 +668,16 @@ bool SeqPlayer::ParseNextEvent(SeqSlot& s, AudioSystem* system)
     else if (event == 0xB0) { // Control Change
         uint8_t controller = s.pData[s.currentPos++];
         uint8_t value = s.pData[s.currentPos++];
-        if (controller == 7) s.channels[chan].volume = value;
+
+        if (controller == 7) { // Volume
+            s.channels[chan].volume = value;
+        }
+        else if (controller == 10) { // Pan (0..127, 64 = Center)
+            s.channels[chan].pan = value;
+        }
+        else if (controller == 11) { // Expression
+            s.channels[chan].expression = value; 
+        }
     }
     else if (event == 0xC0) { s.channels[chan].program = s.pData[s.currentPos++]; }
     else if (event == 0xE0) { // Pitch Bend
@@ -686,6 +686,8 @@ bool SeqPlayer::ParseNextEvent(SeqSlot& s, AudioSystem* system)
         // Сохраняем значение бенда (-8192 до +8191)
         int bendValue = ((msb << 7) | lsb) - 8192;
         // Передаем в систему, чтобы она обновила питч играющих голосов
+        
+        
         system->SetPitchBend(chan, (float)bendValue / 8192.0f);
     }
     else if (status == 0xFF) {
@@ -693,10 +695,41 @@ bool SeqPlayer::ParseNextEvent(SeqSlot& s, AudioSystem* system)
         uint8_t len = s.pData[s.currentPos++];
         if (type == 0x2F)
         {
-            printf(" SeqPlayer::ParseNextEvent  End\n");
-            return false; // End
+            printf(" SeqPlayer: Track finished. Looping...\n");
+
+            // 1. Возвращаем курсор на начало данных (сразу после заголовка)
+            s.currentPos = 15;
+
+            // 2. Сбрасываем накопитель времени и статус
+            s.tickAccumulator = 0;
+            s.runningStatus = 0;
+
+            // 3. Читаем задержку самого первого события заново
+            if (s.currentPos < s.dataSize) {
+                s.waitTicks = ReadVLQ(s.pData, s.currentPos, s.dataSize);
+            }
+            else {
+                return false; // Если данных почему-то нет
+            }
+
+            // 4. Возвращаем true, чтобы слот НЕ деактивировался
+            return true;
         }
-        s.currentPos += len;
+        else if (type == 0x51) {
+            // TEMPO CHANGE: В PS1 SEQ нет байта длины для темпа!
+            // Сразу читаем 3 байта данных
+            uint32_t val = (s.pData[s.currentPos] << 16) |
+                (s.pData[s.currentPos + 1] << 8) |
+                s.pData[s.currentPos + 2];
+            s.currentPos += 3;
+            s.tempo = val;
+        }
+        else {
+            // Для неизвестных событий пробуем прочитать длину (как в MIDI), 
+            // но в PS1 это редкость.
+            //uint8_t len = s.pData[s.currentPos++];
+            s.currentPos += len;
+        }
     }
 
     // --- 3. ЧИТАЕМ ЗАДЕРЖКУ ДО СЛЕДУЮЩЕГО СОБЫТИЯ ---
@@ -719,7 +752,7 @@ uint32_t SeqPlayer::ReadVLQ(const uint8_t* data, uint32_t& pos, uint32_t size)
      //   if (pos >= size) return 0; // Конец данных
         byte = data[pos++];
         value = (value << 7) | (byte & 0x7F);
-    //    if (++safety > 4) break; // Защита от бесконечного цикла
+        if (++safety > 4) break; // Защита от бесконечного цикла
     } while (byte & 0x80);
     return value;
 }

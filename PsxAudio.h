@@ -1,4 +1,4 @@
-#pragma once
+Ôªø#pragma once
 #include "raylib.h"
 #include "raymath.h"
 #include <cmath>
@@ -8,8 +8,8 @@
 #include <cstdio>
 #include <map>
 
-const int SPU_VOICES_COUNT = 127;//127;
-const int SFX_VOICE_LIMIT = 128;//128; // 0..19 ‰Îˇ ˝ÙÙÂÍÚÓ‚, 20..23 ‰Îˇ ÏÛÁ˚ÍË/ÎÛÔÓ‚
+const int SPU_VOICES_COUNT = 127;
+const int SFX_VOICE_LIMIT = 128;
 
 const int SPU_SAMPLE_RATE = 44100;
 const int MAX_AUDIO_BUFFER = 8192;
@@ -17,7 +17,7 @@ const int MAX_AUDIO_BUFFER = 8192;
 enum AdsrState { ADSR_IDLE, ADSR_ATTACK, ADSR_DECAY, ADSR_SUSTAIN, ADSR_RELEASE };
 enum WaveType { WAVE_SINE, WAVE_SAW, WAVE_SQUARE, WAVE_NOISE };
 
-
+double linearAmpDecayTimeToLinDBDecayTime(double secondsToFullAtten, double targetDb_LeastSquares = 70, double targetDb_InitialSlope = 140);
 enum class InstrumentType { Synth, Sample };
 
 struct AdsrSettings 
@@ -35,7 +35,7 @@ struct Instrument {
     unsigned int sampleCount = 0;
     bool loop = false;
 
-    int baseNote;       // ¡‡ÁÓ‚‡ˇ ÌÓÚ‡ (Ó·˚˜ÌÓ 60 - Middle C) ‰Îˇ Ô‡‚ËÎ¸ÌÓ„Ó ÔËÚ˜‡
+    int baseNote;       // –ë–∞–∑–æ–≤–∞—è –Ω–æ—Ç–∞ (–æ–±—ã—á–Ω–æ 60 - Middle C) –¥–ª—è –ø—Ä–∞–≤–∏–ª—å–Ω–æ–≥–æ –ø–∏—Ç—á–∞
     InstrumentType type;
     int8_t fineTune = 0;
     AdsrSettings adsr;
@@ -52,8 +52,8 @@ struct Tone {
     // ADSR
     float attack = 0.001f;
     float decay = 0.5f;
-    float sustain = 0.5f;
-    float release = 1.0f;
+    float sustain = 1.0f;
+    float release = 0.2f;
 
     InstrumentType type = InstrumentType::Sample;
     bool loop = false;
@@ -61,13 +61,13 @@ struct Tone {
 
 struct Program 
 {
-    Tone tones[16]; // ‘ËÍÒËÓ‚‡ÌÌ˚È Ï‡ÒÒË‚ (ÛÍ‡Á‡ÚÂÎË Ì‡ ˝ÎÂÏÂÌÚ˚ ·Û‰ÛÚ ‚Â˜Ì˚ÏË)
+    Tone tones[16]; // –§–∏–∫—Å–∏—Ä–æ–≤–∞–Ω–Ω—ã–π –º–∞—Å—Å–∏–≤ (—É–∫–∞–∑–∞—Ç–µ–ª–∏ –Ω–∞ —ç–ª–µ–º–µ–Ω—Ç—ã –±—É–¥—É—Ç –≤–µ—á–Ω—ã–º–∏)
     int toneCount = 0;
 };
 
 class SpuVoice {
 private:
-    //  ”¡»◊≈— ¿ﬂ »Õ“≈–œŒÀﬂ÷»ﬂ (›ÏÛÎˇˆËˇ "Ïˇ„ÍÓ„Ó" Á‚ÛÍ‡ PS1)
+    // –ö–£–ë–ò–ß–ï–°–ö–ê–Ø –ò–ù–¢–ï–†–ü–û–õ–Ø–¶–ò–Ø (–≠–º—É–ª—è—Ü–∏—è "–º—è–≥–∫–æ–≥–æ" –∑–≤—É–∫–∞ PS1)
     float CubicInterp(float y0, float y1, float y2, float y3, float mu) {
         float a0, a1, a2, a3;
         float mu2 = mu * mu;
@@ -92,7 +92,7 @@ public:
 
     const Tone* instrument = nullptr;
 
-    // ’‡ÌËÏ ÔÓÒÎÂ‰ÌËÈ Ò˝ÏÔÎ ‰Îˇ FM-ÏÓ‰ÛÎˇˆËË ÒÎÂ‰Û˛˘Â„Ó Í‡Ì‡Î‡
+    // –•—Ä–∞–Ω–∏–º –ø–æ—Å–ª–µ–¥–Ω–∏–π —Å—ç–º–ø–ª –¥–ª—è FM-–º–æ–¥—É–ª—è—Ü–∏–∏ —Å–ª–µ–¥—É—é—â–µ–≥–æ –∫–∞–Ω–∞–ª–∞
     float lastSampleOutput = 0.0f;
 
     void NoteOn(const Tone* inst, float p, float vol,float pan, int note, int progID)
@@ -101,13 +101,13 @@ public:
         basePitch = p;
         pitch = p;
         currentNote = (uint8_t)note;
-        parentProgramID = progID; // «‡ÔÓÏËÌ‡ÂÏ ÔÓ„‡ÏÏÛ
+        parentProgramID = progID; // –ó–∞–ø–æ–º–∏–Ω–∞–µ–º –ø—Ä–æ–≥—Ä–∞–º–º—É
         active = true;
         state = ADSR_ATTACK;
         sampleCursor = 0.0f;
         currentEnvelopeVal = 0.0f;
 
-        // –‡Ò˜ÂÚ ÒÚÂÂÓ (pan: 0.0 - ÎÂ‚Ó, 0.5 - ˆÂÌÚ, 1.0 - Ô‡‚Ó)
+        // –†–∞—Å—á–µ—Ç —Å—Ç–µ—Ä–µ–æ (pan: 0.0 - –ª–µ–≤–æ, 0.5 - —Ü–µ–Ω—Ç—Ä, 1.0 - –ø—Ä–∞–≤–æ)
         leftVolume = cosf(pan * (float)PI / 2.0f) * vol;
         rightVolume = sinf(pan * (float)PI / 2.0f) * vol;
 
@@ -131,35 +131,37 @@ public:
         return active;// && (state != ADSR_IDLE);
     }
     void SetVolumeAndPan(float vol, float pan) {
-        // “‡ ÊÂ ÎÓ„ËÍ‡ Ô‡ÌÓ‡Ï˚, ˜ÚÓ Ë ‚ NoteOn
+        // –¢–∞ –∂–µ –ª–æ–≥–∏–∫–∞ –ø–∞–Ω–æ—Ä–∞–º—ã, —á—Ç–æ –∏ –≤ NoteOn
         leftVolume = cosf(pan * PI / 2.0f) * vol;
         rightVolume = sinf(pan * PI / 2.0f) * vol;
-        // volume Ò‡ÏÓ ÔÓ ÒÂ·Â Û Ì‡Ò ı‡ÌËÚ "Ì‡˜‡Î¸ÌÛ˛" „ÓÏÍÓÒÚ¸, 
-        // ÌÓ ‰Îˇ ‰ËÌ‡ÏË˜ÂÒÍÓ„Ó 3D ÎÛ˜¯Â Ó·ÌÓ‚ÎˇÚ¸ left/right Ì‡ÔˇÏÛ˛.
+        // volume —Å–∞–º–æ –ø–æ —Å–µ–±–µ —É –Ω–∞—Å —Ö—Ä–∞–Ω–∏—Ç "–Ω–∞—á–∞–ª—å–Ω—É—é" –≥—Ä–æ–º–∫–æ—Å—Ç—å, 
+        // –Ω–æ –¥–ª—è –¥–∏–Ω–∞–º–∏—á–µ—Å–∫–æ–≥–æ 3D –ª—É—á—à–µ –æ–±–Ω–æ–≤–ª—è—Ç—å left/right –Ω–∞–ø—Ä—è–º—É—é.
     }
 
-    // modInput - ˝ÚÓ ÒË„Ì‡Î Ò ÔÂ‰˚‰Û˘Â„Ó Í‡Ì‡Î‡ ‰Îˇ FM-ÒËÌÚÂÁ‡
+    // modInput - —ç—Ç–æ —Å–∏–≥–Ω–∞–ª —Å –ø—Ä–µ–¥—ã–¥—É—â–µ–≥–æ –∫–∞–Ω–∞–ª–∞ –¥–ª—è FM-—Å–∏–Ω—Ç–µ–∑–∞
     void GetSamples(float* outL, float* outR, float dt, float modInput = 0.0f)
     {
-        // ≈ÒÎË „ÓÎÓÒ ‚˚ÍÎ˛˜ÂÌ ËÎË ADSR Á‡ÍÓÌ˜ËÎÒˇ
         if (!active || state == ADSR_IDLE) {
             *outL = 0; *outR = 0;
             lastSampleOutput = 0.0f;
             return;
         }
 
-        // === 1. Œ¡ÕŒ¬À≈Õ»≈ ADSR (“‚ÓÈ ÍÓ‰ ·ÂÁ ËÁÏÂÌÂÌËÈ) ===
+        // === ADSR ===
         float rate = 0.0f;
         float target = 0.0f;
 
         switch (state) {
         case ADSR_ATTACK:
             currentEnvelopeVal += dt / (adsr.attack + 0.001f);
-            if (currentEnvelopeVal >= 1.0f) { currentEnvelopeVal = 1.0f; state = ADSR_DECAY; }
+            if (currentEnvelopeVal >= 1.0f) {
+                currentEnvelopeVal = 1.0f;
+                state = ADSR_DECAY;
+            }
             break;
         case ADSR_DECAY:
             target = adsr.sustain;
-            rate = 5.0f / (adsr.decay + 0.001f);
+            rate = 15.0f / (adsr.decay + 0.001f);
             currentEnvelopeVal += (target - currentEnvelopeVal) * rate * dt;
             if (fabs(currentEnvelopeVal - target) < 0.01f) {
                 currentEnvelopeVal = target;
@@ -167,13 +169,14 @@ public:
             }
             break;
         case ADSR_SUSTAIN:
+            // –í–æ –≤—Ä–µ–º—è —É–¥–µ—Ä–∂–∞–Ω–∏—è –ø—Ä–æ—Å—Ç–æ –ø–ª–∞–≤–Ω–æ —Å—Ç—Ä–µ–º–∏–º—Å—è –∫ sustain
             currentEnvelopeVal += (adsr.sustain - currentEnvelopeVal) * 10.0f * dt;
             break;
         case ADSR_RELEASE:
-            target = 0.0f;
-            rate = 1.0f / (adsr.release + 0.001f);
-            //rate = 1.0f / (adsr.release + 0.001f);
-            currentEnvelopeVal += (target - currentEnvelopeVal) * rate * dt;
+            // –£–º–Ω–æ–∂–∞–µ–º —Ç–µ–∫—É—â–µ–µ –∑–Ω–∞—á–µ–Ω–∏–µ –Ω–∞ –∫–æ—ç—Ñ—Ñ–∏—Ü–∏–µ–Ω—Ç. –û–Ω–æ –±—É–¥–µ—Ç –ø–ª–∞–≤–Ω–æ —Å—Ç—Ä–µ–º–∏—Ç—å—Å—è –∫ –Ω—É–ª—é.
+            rate = 8.0f / (adsr.release + 0.005f);
+            currentEnvelopeVal -= currentEnvelopeVal * rate * dt;
+
             if (currentEnvelopeVal < 0.001f) {
                 currentEnvelopeVal = 0.0f;
                 state = ADSR_IDLE;
@@ -188,124 +191,116 @@ public:
         if (instrument && !instrument->data.empty()) {
             unsigned int len = instrument->sampleCount;
 
-            // === –¿«ƒ≈À≈Õ»≈ ÀŒ√» » ƒÀﬂ —›ÃœÀŒ¬ » —»Õ“≈«¿“Œ–¿ ===
+            // === –†–ê–ó–î–ï–õ–ï–ù–ò–ï –õ–û–ì–ò–ö–ò –î–õ–Ø –°–≠–ú–ü–õ–û–í –ò –°–ò–ù–¢–ï–ó–ê–¢–û–†–ê ===
 
             float step = 0.0f;
             bool isSample = (instrument->type == InstrumentType::Sample);
 
             if (isSample) {
-                // --- ÀŒ√» ¿ ƒÀﬂ WAV (—›ÃœÀ€) ---
-
-                // 1. —ÍÓÓÒÚ¸ ÔÓÒÚÓ ‡‚Ì‡ ÔËÚ˜Û (1.0 = ÌÓÏ‡Î¸Ì‡ˇ ÒÍÓÓÒÚ¸)
-                // 44100.0f ÌÛÊÌÓ, Ú‡Í Í‡Í dt Û Ì‡Ò ‚ ÒÂÍÛÌ‰‡ı, ‡ ÍÛÒÓ ‚ Ò˝ÏÔÎ‡ı
-                // ≈ÒÎË pitch = 1.0, Ï˚ ‰‚Ë„‡ÂÏÒˇ Ì‡ 44100 Ò˝ÏÔÎÓ‚ ‚ ÒÂÍÛÌ‰Û
+                // 1–°–∫–æ—Ä–æ—Å—Ç—å –ø—Ä–æ—Å—Ç–æ —Ä–∞–≤–Ω–∞ –ø–∏—Ç—á—É (1.0 = –Ω–æ—Ä–º–∞–ª—å–Ω–∞—è —Å–∫–æ—Ä–æ—Å—Ç—å)
+                // 44100.0f –Ω—É–∂–Ω–æ, —Ç–∞–∫ –∫–∞–∫ dt —É –Ω–∞—Å –≤ —Å–µ–∫—É–Ω–¥–∞—Ö, –∞ –∫—É—Ä—Å–æ—Ä –≤ —Å—ç–º–ø–ª–∞—Ö
+                // –ï—Å–ª–∏ pitch = 1.0, –º—ã –¥–≤–∏–≥–∞–µ–º—Å—è –Ω–∞ 44100 —Å—ç–º–ø–ª–æ–≤ –≤ —Å–µ–∫—É–Ω–¥—É
                 step = pitch *(SPU_SAMPLE_RATE * dt);
                 
-                // FM ÏÓ‰ÛÎˇˆËˇ ‰Îˇ Ò˝ÏÔÎÓ‚ (Ó·˚˜ÌÓ ÌÂ ÌÛÊÌ‡, ÌÓ ÏÓÊÌÓ ÓÒÚ‡‚ËÚ¸ ‰Îˇ ˝ÙÙÂÍÚÓ‚)
+                // FM –º–æ–¥—É–ª—è—Ü–∏—è –¥–ª—è —Å—ç–º–ø–ª–æ–≤
                 float fmFactor = 1.0f + (modInput * 0.1f);
                 step *= fmFactor;
 
-                // 2. ƒ‚ËÊÂÌËÂ ÍÛÒÓ‡
+                // 2. –î–≤–∏–∂–µ–Ω–∏–µ –∫—É—Ä—Å–æ—Ä–∞
                 sampleCursor += step;
 
-                // 3. Œ·‡·ÓÚÍ‡ ÍÓÌˆ‡ Ù‡ÈÎ‡
-                if (sampleCursor >= len) {
-                    if (instrument->loop) {
+                // 3. –û–±—Ä–∞–±–æ—Ç–∫–∞ –∫–æ–Ω—Ü–∞ —Ñ–∞–π–ª–∞
+                if (sampleCursor >= len) 
+                {
+                    if (instrument->loop) 
+                    {
                         sampleCursor = fmod(sampleCursor, (float)len);
                     }
-                    else {
-                        active = false;
-                        *outL = 0; *outR = 0;
-                        return;
+                    else 
+                    {
+                        if (state != ADSR_IDLE && state != ADSR_RELEASE) {
+                            state = ADSR_RELEASE;
+                            adsr.release = 0.005f; // –§–æ—Ä—Å–∏—Ä—É–µ–º –æ—á–µ–Ω—å –±—ã—Å—Ç—Ä–æ–µ –∑–∞—Ç—É—Ö–∞–Ω–∏–µ (5 –º—Å)
+                        }
+
+                        // –£–¥–µ—Ä–∂–∏–≤–∞–µ–º –∫—É—Ä—Å–æ—Ä –Ω–∞ –ø–æ—Å–ª–µ–¥–Ω–µ–º —Å—ç–º–ø–ª–µ, —á—Ç–æ–±—ã –∏–Ω—Ç–µ—Ä–ø–æ–ª—è—Ü–∏–∏ 
+                        // –±—ã–ª–æ –æ—Ç–∫—É–¥–∞ –±–µ–∑–æ–ø–∞—Å–Ω–æ —á–∏—Ç–∞—Ç—å –¥–∞–Ω–Ω—ã–µ, –ø–æ–∫–∞ –∏–¥–µ—Ç Release
+                        sampleCursor = (float)(len - 1);
                     }
                 }
             }
             else {
-                // --- ÀŒ√» ¿ ƒÀﬂ —»Õ“≈«¿“Œ–¿ (WAVETABLE) ---
+                // --- –õ–û–ì–ò–ö–ê –î–õ–Ø –°–ò–ù–¢–ï–ó–ê–¢–û–†–ê (WAVETABLE) ---
 
                 float fmFactor = 1.0f + (modInput * 0.5f);
                 float targetFreq = 261.63f * pitch * fmFactor;
-                step = ((float)len * targetFreq) * dt; // dt ÛÊÂ ÂÒÚ¸ (1/SampleRate)
-                // »ÎË Ú‚Óˇ ÒÚ‡‡ˇ ÙÓÏÛÎ‡:
-                // step = ((float)len * targetFreq) / (float)SPU_SAMPLE_RATE; 
+                step = ((float)len * targetFreq) * dt; // dt —É–∂–µ –µ—Å—Ç—å (1/SampleRate)
 
                 sampleCursor += step;
 
-                // —ËÌÚÂÁ‡ÚÓ ‚ÒÂ„‰‡ Á‡ˆËÍÎÂÌ (‚ÓÎÌ‡)
+                // –°–∏–Ω—Ç–µ–∑–∞—Ç–æ—Ä –≤—Å–µ–≥–¥–∞ –∑–∞—Ü–∏–∫–ª–µ–Ω (–≤–æ–ª–Ω–∞)
                 if (sampleCursor >= len) sampleCursor -= len;
                 if (sampleCursor < 0) sampleCursor += len;
             }
 
-            // === »Õ“≈–œŒÀﬂ÷»ﬂ ===
 
             int i1 = (int)sampleCursor;
             int i2 = i1 + 1;
             int i0 = i1 - 1;
             int i3 = i1 + 2;
 
-            // ¡ÂÁÓÔ‡ÒÌÓÂ ˜ÚÂÌËÂ ËÌ‰ÂÍÒÓ‚
+
             if (isSample) {
-                // ƒÎˇ Ò˝ÏÔÎÓ‚ ÌÂ ÍÛÚËÏ ËÌ‰ÂÍÒ˚ ÔÓ ÍÛ„Û (ÍÓÏÂ ÒÎÛ˜‡ˇ loop, ÌÓ ÓÌ ‚˚¯Â Ó·‡·ÓÚ‡Ì)
-                // œÓÒÚÓ ÍÎ‡ÏÔËÏ Í‡ˇ, ˜ÚÓ·˚ ÌÂ ‚˚ÎÂÚÂÚ¸ Á‡ Ï‡ÒÒË‚
-                // i0 (ÔÂ‰˚‰Û˘ËÈ) ‚ÒÂ„‰‡ ÍÎ‡ÏÔËÏ ËÎË ‚‡ÔÔËÏ ÂÒÎË Ì‡‰Ó (ÌÓ ‰Îˇ ÍÛ·ËÍË ÍÎ‡ÏÔ ·ÂÁÓÔ‡ÒÌÂÂ)
+                // –î–ª—è —Å—ç–º–ø–ª–æ–≤ –Ω–µ –∫—Ä—É—Ç–∏–º –∏–Ω–¥–µ–∫—Å—ã –ø–æ –∫—Ä—É–≥—É (–∫—Ä–æ–º–µ —Å–ª—É—á–∞—è loop, –Ω–æ –æ–Ω –≤—ã—à–µ –æ–±—Ä–∞–±–æ—Ç–∞–Ω)
+                // –ü—Ä–æ—Å—Ç–æ –∫–ª–∞–º–ø–∏–º –∫—Ä–∞—è, —á—Ç–æ–±—ã –Ω–µ –≤—ã–ª–µ—Ç–µ—Ç—å –∑–∞ –º–∞—Å—Å–∏–≤
+                // i0 (–ø—Ä–µ–¥—ã–¥—É—â–∏–π) –≤—Å–µ–≥–¥–∞ –∫–ª–∞–º–ø–∏–º –∏–ª–∏ –≤—Ä–∞–ø–ø–∏–º –µ—Å–ª–∏ –Ω–∞–¥–æ (–Ω–æ –¥–ª—è –∫—É–±–∏–∫–∏ –∫–ª–∞–º–ø –±–µ–∑–æ–ø–∞—Å–Ω–µ–µ)
                 if (i0 < 0) {
-                    // ≈ÒÎË Á‡ˆËÍÎÂÌÓ - ·ÂÂÏ Ò ÍÓÌˆ‡, ËÌ‡˜Â 0
+                    // –ï—Å–ª–∏ –∑–∞—Ü–∏–∫–ª–µ–Ω–æ - –±–µ—Ä–µ–º —Å –∫–æ–Ω—Ü–∞, –∏–Ω–∞—á–µ 0
                     i0 = instrument->loop ? (len - 1) : 0;
                 }
 
-                // i1 (ÚÂÍÛ˘ËÈ)
-                if (i1 >= len) i1 = len - 1;
+                if (i1 >= len) 
+                    i1 = len - 1;
 
-                if (instrument->loop) {
-                    // œ–¿¬»À‹ÕŒ≈ «¿÷» À»¬¿Õ»≈ ƒÀﬂ  ”¡» »
+                if (instrument->loop) 
+                {
                     if (i0 < 0) i0 = len - 1;
                     i1 %= len;
                     i2 %= len;
                     i3 %= len;
                 }
-                else {
-                    //  À¿Ãœ»Õ√ ƒÀﬂ Œƒ»ÕŒ◊Õ€’ «¬” Œ¬
+                else 
+                {
                     if (i0 < 0) i0 = 0;
                     if (i1 >= len) i1 = len - 1;
                     if (i2 >= len) i2 = len - 1;
                     if (i3 >= len) i3 = len - 1;
                 }
-                 //i2 (ÒÎÂ‰Û˛˘ËÈ) Ë i3 (˜ÂÂÁ Ó‰ËÌ)
-                //if (instrument->loop) {
-                //    // ≈—À» «¿÷» À≈ÕŒ: ·ÂÂÏ ‰‡ÌÌ˚Â ËÁ Õ¿◊¿À¿ Ï‡ÒÒË‚‡
-                //    if (i2 >= len) i2 %= len;
-                //    if (i3 >= len) i3 %= len;
-                //}
-                //else {
-                //    // ≈—À» Õ≈ «¿÷» À≈ÕŒ: Û‰ÂÊË‚‡ÂÏ ÔÓÒÎÂ‰ÌËÈ Ò˝ÏÔÎ
-                //    if (i2 >= len) i2 = len - 1;
-                //    if (i3 >= len) i3 = len - 1;
-                //}
             }
-            else {
-                // ƒÎˇ ÒËÌÚÂÁ‡ÚÓ‡ ÍÛÚËÏ ÔÓ ÍÛ„Û
+            else 
+            {
+                // –î–ª—è —Å–∏–Ω—Ç–µ–∑–∞—Ç–æ—Ä–∞ –∫—Ä—É—Ç–∏–º –ø–æ –∫—Ä—É–≥—É
                 if (i1 >= len) i1 %= len;
                 if (i2 >= len) i2 %= len;
                 if (i0 < 0) i0 += len;
                 if (i3 >= len) i3 %= len;
             }
 
-            // ◊“≈Õ»≈ ƒ¿ÕÕ€’
-            // ¬¿∆ÕŒ: ”·Ë‡ÂÏ ‰ÂÎÂÌËÂ Ì‡ 32767 ‰Îˇ Ò˝ÏÔÎÓ‚ (ÓÌË ÛÊÂ float)
-            // ƒÎˇ ÒËÌÚÂÁ‡ÚÓ‡ ÓÒÚ‡‚ÎˇÂÏ ‰ÂÎÂÌËÂ, ≈—À» ÓÌ ‚ÒÂ Â˘Â „ÂÌÂËÛÂÚ ·ÓÎ¸¯ËÂ ˜ËÒÎ‡ (short)
+            // –ß–¢–ï–ù–ò–ï –î–ê–ù–ù–´–•
+            // –í–ê–ñ–ù–û: –£–±–∏—Ä–∞–µ–º –¥–µ–ª–µ–Ω–∏–µ –Ω–∞ 32767 –¥–ª—è —Å—ç–º–ø–ª–æ–≤ (–æ–Ω–∏ —É–∂–µ float)
+            // –î–ª—è —Å–∏–Ω—Ç–µ–∑–∞—Ç–æ—Ä–∞ –æ—Å—Ç–∞–≤–ª—è–µ–º –¥–µ–ª–µ–Ω–∏–µ, –ï–°–õ–ò –æ–Ω –≤—Å–µ –µ—â–µ –≥–µ–Ω–µ—Ä–∏—Ä—É–µ—Ç –±–æ–ª—å—à–∏–µ —á–∏—Å–ª–∞ (short)
 
             float y0, y1, y2, y3;
 
             if (isSample) {
-                // WAV (Float -1..1) - ˜ËÚ‡ÂÏ Í‡Í ÂÒÚ¸
+                // WAV (Float -1..1) 
                 y0 = instrument->data[i0];
                 y1 = instrument->data[i1];
                 y2 = instrument->data[i2];
                 y3 = instrument->data[i3];
             }
             else {
-                // Synth (Short -32k..32k) - ‰ÂÎËÏ
-                // (œÂ‰ÔÓÎ‡„‡˛, ˜ÚÓ ÒÚ‡˚È „ÂÌÂ‡ÚÓ ‰ÂÎ‡ÂÚ short, ‰‡ÊÂ ÂÒÎË Ï‡ÒÒË‚ float*)
+                // Synth (Short -32k..32k) 
                 y0 = instrument->data[i0] / 32767.0f;
                 y1 = instrument->data[i1] / 32767.0f;
                 y2 = instrument->data[i2] / 32767.0f;
@@ -326,11 +321,12 @@ public:
 
 
 
-class PsxSpu {
-private:
-    short pcmBuffer[MAX_AUDIO_BUFFER * 2];
+class PsxSpu 
+{
 public:
-
+    unsigned long RateTable[160];
+    
+    inline static PsxSpu* instance = nullptr;
     
     int sfxCursor = 0;
 
@@ -338,35 +334,85 @@ public:
     AudioStream stream;
     float* reverbBuffer;
     int reverbCursor = 0, reverbSize = 0;
-    float masterVolume = 0.75f;
-    float reverbMix = 0.01f;
-    float reverbDecay = 0.01f; // PS1 reverb was quite long
+   // float masterVolume = 0.75f;
+    float reverbMix = 0.25f;
+    float reverbDecay = 0.4f; // PS1 reverb was quite long
     int currentBufferSize = 1024;//1024;
     int currentVoiceIndex = 0;
 
-    // Ã‡ÒÒË‚ ÙÎ‡„Ó‚: ‚ÍÎ˛˜ÂÌ ÎË FM ‰Îˇ „ÓÎÓÒ‡ N (ÏÓ‰ÛÎËÛÂÚÒˇ ÎË ÓÌ „ÓÎÓÒÓÏ N-1)
     bool voiceFmFlags[SPU_VOICES_COUNT] = { false };
 
+
     PsxSpu() {
-        InitAudioSystem(1024);
-        reverbSize = (int)(SPU_SAMPLE_RATE * 0.35f);
-        reverbBuffer = (float*)calloc(reverbSize * 2, sizeof(float));
-        memset(pcmBuffer, 0, sizeof(pcmBuffer));
     }
 
     ~PsxSpu()
     {
-        if (IsAudioStreamValid(stream))
+        if (IsAudioStreamValid(stream)) {
+            SetAudioStreamCallback(stream, nullptr);
             UnloadAudioStream(stream);
-        free(reverbBuffer);
+        }
+        if (reverbBuffer) {
+            free(reverbBuffer);
+            reverbBuffer = nullptr;
+        }
+
+        instance = nullptr;
     }
 
-    void InitAudioSystem(int bufferSize) {
-        if (IsAudioStreamValid(stream)) UnloadAudioStream(stream);
-        SetAudioStreamBufferSizeDefault(bufferSize);
-        stream = LoadAudioStream(SPU_SAMPLE_RATE, 16, 2);
-        PlayAudioStream(stream);
+    static void AudioCallbackWrapper(void* bufferData, unsigned int frames) {
+        if (instance) instance->GenerateAudio((short*)bufferData, frames);
+    }
+
+
+    void initADSR()
+    {
+        // build the rate table according to Neill's rules
+        memset(RateTable, 0, sizeof(unsigned long) * 160);
+
+        uint32_t r = 3;
+        uint32_t rs = 1;
+        uint32_t rd = 0;
+
+        // we start at pos 32 with the real values... everything before is 0
+        for (int i = 32; i < 160; i++) {
+            if (r < 0x3FFFFFFF) {
+                r += rs;
+                rd++;
+                if (rd == 5) {
+                    rd = 1;
+                    rs *= 2;
+                }
+            }
+            if (r > 0x3FFFFFFF)
+                r = 0x3FFFFFFF;
+
+            RateTable[i] = r;
+        }
+    }
+
+    void InitAudioSystem(int bufferSize) 
+    {
+        if (IsAudioStreamValid(stream)) {
+            SetAudioStreamCallback(stream, nullptr); 
+            UnloadAudioStream(stream);
+        }
+
         currentBufferSize = bufferSize;
+        SetAudioStreamBufferSizeDefault(currentBufferSize);
+        stream = LoadAudioStream(SPU_SAMPLE_RATE, 16, 2);
+
+        reverbSize = (int)(SPU_SAMPLE_RATE * 0.35f);
+        if (reverbBuffer != nullptr) free(reverbBuffer);
+        reverbBuffer = (float*)calloc(reverbSize * 2, sizeof(float));
+        reverbCursor = 0;
+
+        instance = this;
+        SetAudioStreamCallback(stream, AudioCallbackWrapper);
+
+        PlayAudioStream(stream);
+
+        initADSR();
     }
 
     void StopAllVoices()
@@ -374,7 +420,7 @@ public:
         for (int i = 0; i < SPU_VOICES_COUNT; i++) {
             voices[i].active = false;
             voices[i].state = ADSR_IDLE;
-            voices[i].instrument = nullptr; // Œ˜ÂÌ¸ ‚‡ÊÌÓ Ó·ÌÛÎËÚ¸ ÛÍ‡Á‡ÚÂÎ¸
+            voices[i].instrument = nullptr; 
         }
     }
 
@@ -388,50 +434,27 @@ public:
                 break;
             }
         }
-        // ≈ÒÎË ‚ÒÂ 127 „ÓÎÓÒÓ‚ Á‡ÌˇÚ˚ (˜ÚÓ ‚ˇ‰ ÎË), Í‡‰ÂÏ Ò‡Ï˚È ÒÚ‡˚È
         if (id == -1) 
         {
-            id = sfxCursor;
-            sfxCursor = (sfxCursor + 1) % SPU_VOICES_COUNT;
-            printf("all voice is bussy!\n");
+            for (int i = 0; i < SPU_VOICES_COUNT; i++) 
+            {
+                if (voices[i].state == ADSR_RELEASE)
+                {
+                    id = i;
+                    break;
+                }
+            }
+            if (id == -1) {
+                id = sfxCursor;
+                sfxCursor = (sfxCursor + 1) % SPU_VOICES_COUNT;
+                 printf("all voices are busy!\n"); 
+            }
         }
-
-        // «‡ÔÛÒÍ‡ÂÏ ÌÓÚÛ Ì‡ ‚˚·‡ÌÌÓÏ ID
-        voices[id].active = false; // —·ÓÒ ÔÂÂ‰ NoteOn
+        voices[id].active = false; 
         voices[id].NoteOn(inst, pitch, volume, pan, note, progID);
         voiceFmFlags[id] = fmEnabled;
 
         return id;
-        //int id = -1;
-
-        //// === —“–¿“≈√»ﬂ ¬€¡Œ–¿ √ŒÀŒ—¿ ===
-
-        //if (inst->loop) {
-        //    // --- ƒÀﬂ À”œŒ¬ (ÃÛÁ˚Í‡, „ÛÎ Î‡ÏÔ) ---
-        //    // »˘ÂÏ œ≈–¬€… —¬Œ¡ŒƒÕ€… ÒÎÓÚ ‚ "·ÂÁÓÔ‡ÒÌÓÈ ÁÓÌÂ" (20-23)
-        //    for (int i = SFX_VOICE_LIMIT; i < SPU_VOICES_COUNT; i++) {
-        //        if (!voices[i].active || voices[i].state == ADSR_IDLE) {
-        //            id = i;
-        //            break;
-        //        }
-        //    }
-        //    // ≈ÒÎË ‚ÒÂ ÂÁÂ‚Ì˚Â ÒÎÓÚ˚ Á‡ÌˇÚ˚, ÔÓ·ÛÂÏ ÔÂÂÁ‡ÔËÒ‡Ú¸ Ò‡Ï˚È ÒÚ‡˚È (ËÎË ÔÓÒÚÓ ÔÂ‚˚È ÔÓÔ‡‚¯ËÈÒˇ ‚ ÂÁÂ‚Â)
-        //    // ƒÎˇ ÔÓÒÚÓÚ˚: ÂÒÎË ÏÂÒÚ‡ ÌÂÚ, ·ÂÂÏ Ò‡Ï˚È ÔÓÒÎÂ‰ÌËÈ ÒÎÓÚ
-        //    if (id == -1) id = SPU_VOICES_COUNT - 1;
-        //}
-        //else {
-        //    // --- ƒÀﬂ SFX (ÿ‡„Ë, ‚˚ÒÚÂÎ˚) ---
-        //    // »ÒÔÓÎ¸ÁÛÂÏ Í‡ÛÒÂÎ¸ “ŒÀ‹ Œ ‚ ‰Ë‡Ô‡ÁÓÌÂ 0..19
-        //    id = sfxCursor;
-        //    sfxCursor++;
-        //    //if (sfxCursor >= SFX_VOICE_LIMIT) sfxCursor = 0;
-        //}
-        //
-        //// «‡ÔÛÒÍ‡ÂÏ ÌÓÚÛ Ì‡ ‚˚·‡ÌÌÓÏ ID
-        //voices[id].NoteOn(inst, pitch, volume, pan, note, progID);
-        //voiceFmFlags[id] = fmEnabled;
-
-        //return id;
     }
 
     void StopVoice(int id) { if (id >= 0 && id < SPU_VOICES_COUNT) voices[id].NoteOff(); }
@@ -448,54 +471,283 @@ public:
 
     void UpdateVoicePitch(int vIdx, float bend) {
         if (vIdx >= 0 && vIdx < SPU_VOICES_COUNT && voices[vIdx].active) {
-            // —Ú‡Ì‰‡ÚÌ˚È ‰Ë‡Ô‡ÁÓÌ ·ÂÌ‰‡ ‚ PS1 ó 2 ÔÓÎÛÚÓÌ‡ (2.0f)
+ 
             float bendRange = 2.0f;
             voices[vIdx].pitch = voices[vIdx].basePitch * powf(2.0f, (bend * bendRange) / 12.0f);
         }
     }
 
-    void Update() {
-        if (!IsAudioStreamProcessed(stream)) return;
-        while (IsAudioStreamProcessed(stream)) {
-            int frames = currentBufferSize;
-            if (frames > MAX_AUDIO_BUFFER) frames = MAX_AUDIO_BUFFER;
-            float dt = 1.0f / SPU_SAMPLE_RATE;
-            for (int i = 0; i < frames; i++) {
-                float mL = 0, mR = 0;
+    void GenerateAudio(short* buffer, unsigned int frames) 
+    {
+        if (frames > MAX_AUDIO_BUFFER) frames = MAX_AUDIO_BUFFER;
+        float dt = 1.0f / SPU_SAMPLE_RATE;
+        for (int i = 0; i < frames; i++)
+        {
+            float mL = 0, mR = 0;
 
-                // œÓıÓ‰ËÏ ÔÓ „ÓÎÓÒ‡Ï
-                for (int v = 0; v < SPU_VOICES_COUNT; v++) {
-                    if (voices[v].active) {
-                        float l, r;
-                    //    printf("Voice %d is playing instrument %p\n", v, voices[v].instrument);
-                        // œÓÎÛ˜‡ÂÏ ‚ıÓ‰ ‰Îˇ FM: ‚˚ıÓ‰ œ–≈ƒ€ƒ”Ÿ≈√Œ „ÓÎÓÒ‡
-                        // ≈ÒÎË ˝ÚÓ 0-È „ÓÎÓÒ, ·ÂÂÏ ÔÓÒÎÂ‰ÌËÈ (23-È), ËÎË ÔÓÒÚÓ 0 (Ó·˚˜ÌÓ 0)
-                        float modIn = 0.0f;
-                        int prevV = (v - 1);
-                        if (prevV < 0) prevV = SPU_VOICES_COUNT - 1;
+            for (int v = 0; v < SPU_VOICES_COUNT; v++)
+            {
+                if (voices[v].active)
+                {
+                    float l, r;
 
-                        // ≈ÒÎË FM ‚ÍÎ˛˜ÂÌ ‰Îˇ ˝ÚÓ„Ó „ÓÎÓÒ‡, ·ÂÂÏ Ò˝ÏÔÎ ÒÓÒÂ‰‡
-                        if (voiceFmFlags[v] && voices[prevV].active) {
-                            modIn = voices[prevV].lastSampleOutput;
+                    float modIn = 0.0f;
+                    int prevV = (v - 1);
+                    if (prevV < 0) prevV = SPU_VOICES_COUNT - 1;
+
+                    // –ï—Å–ª–∏ FM –≤–∫–ª—é—á–µ–Ω –¥–ª—è —ç—Ç–æ–≥–æ –≥–æ–ª–æ—Å–∞, –±–µ—Ä–µ–º —Å—ç–º–ø–ª —Å–æ—Å–µ–¥–∞
+                    if (voiceFmFlags[v] && voices[prevV].active)
+                    {
+                        modIn = voices[prevV].lastSampleOutput;
+                    }
+
+                    voices[v].GetSamples(&l, &r, dt, modIn);
+                    mL += l; mR += r;
+                }
+            }
+
+
+            float rL = reverbBuffer[reverbCursor * 2], rR = reverbBuffer[reverbCursor * 2 + 1];
+            float fL = mL + rL * reverbMix, fR = mR + rR * reverbMix;
+            reverbBuffer[reverbCursor * 2] = fL * reverbDecay;
+            reverbBuffer[reverbCursor * 2 + 1] = fR * reverbDecay;
+            reverbCursor = (reverbCursor + 1) % reverbSize;
+
+            fL = tanhf(fL * 0.6f) / 0.6f;
+            fR = tanhf(fR * 0.6f) / 0.6f;
+
+            if (fL > 1.0f) fL = 1.0f; else if (fL < -1.0f) fL = -1.0f;
+            if (fR > 1.0f) fR = 1.0f; else if (fR < -1.0f) fR = -1.0f;
+
+
+            buffer[i * 2] = (short)(fL * 32000);
+            buffer[i * 2 + 1] = (short)(fR * 32000);
+        }
+
+    }
+
+    inline int roundToZero(int val) {
+        if (val < 0)
+            val = 0;
+        return val;
+    }
+    
+
+    double linearAmpDecayTimeToLinDBDecayTime(double secondsToFullAtten, double targetDb_LeastSquares = 70, double targetDb_InitialSlope = 140)
+    {
+        if (secondsToFullAtten <= 0.0) return 0.0;
+
+        const double ln10 = 2.302585092994046;
+        const double k_short = targetDb_InitialSlope / (20.0 / ln10);
+        const double k_long = targetDb_LeastSquares * ln10 / 45.0;
+
+        // Knee near temporal integration (100‚Äì150 ms). p controls sharpness.
+        const double T_knee = 0.12; // seconds
+        const double p = 2.0;
+
+        const double x = secondsToFullAtten / T_knee;
+        const double w = 1.0 / (1.0 + std::pow(x, p)); // w‚âà1 for very short; ‚Üí0 for long
+
+        return secondsToFullAtten * (w * k_short + (1.0 - w) * k_long);
+    }
+    
+    AdsrSettings MakeADSR(uint16_t ADSR1, uint16_t ADSR2)
+    {
+        uint8_t Am = (ADSR1 & 0x8000) >> 15;    // if 1, then Exponential, else linear
+        uint8_t Ar = (ADSR1 & 0x7F00) >> 8;
+        uint8_t Dr = (ADSR1 & 0x00F0) >> 4;
+        uint8_t Sl = ADSR1 & 0x000F;
+        uint8_t Rm = (ADSR2 & 0x0020) >> 5;
+        uint8_t Rr = ADSR2 & 0x001F;
+
+        // The following are unimplemented in conversion (because DLS and SF2 do not support Sustain Rate)
+        uint8_t Sm = (ADSR2 & 0x8000) >> 15;
+        uint8_t Sd = (ADSR2 & 0x4000) >> 14;
+        uint8_t Sr = (ADSR2 >> 6) & 0x7F;
+
+
+        if (((Am & ~0x01) != 0) ||
+            ((Ar & ~0x7F) != 0) ||
+            ((Dr & ~0x0F) != 0) ||
+            ((Sl & ~0x0F) != 0) ||
+            ((Rm & ~0x01) != 0) ||
+            ((Rr & ~0x1F) != 0) ||
+            ((Sm & ~0x01) != 0) ||
+            ((Sd & ~0x01) != 0) ||
+            ((Sr & ~0x7F) != 0)) {
+            TraceLog(LOG_ERROR,"PSX ADSR parameter(s) out of range"
+                "({:#x}, {:#x}, {:#x}, {:#x}, {:#x}, {:#x}, {:#x}, {:#x}, {:#x})",
+                Am, Ar, Dr, Sl, Rm, Rr, Sm, Sd, Sr);
+            return AdsrSettings();
+        }
+
+        // int rateIncTable[8] = {0, 4, 6, 8, 9, 10, 11, 12};
+        double samples{ 0 };
+        int l;
+
+
+        // to get the dls 32 bit time cents, take log base 2 of number of seconds * 1200 * 65536
+        // (dls1v11a.pdf p25).
+
+      //	if (RateTable[(Ar^0x7F)-0x10 + 32] == 0)
+      //		realADSR->attack_time = 0;
+      //	else
+      //	{
+        if ((Ar ^ 0x7F) < 0x10)
+            Ar = 0;
+        // if linear Ar Mode
+        if (Am == 0) {
+            uint32_t rate = RateTable[roundToZero((Ar ^ 0x7F) - 0x10) + 32];
+            samples = ceil(0x7FFFFFFF / static_cast<double>(rate));
+        }
+        else if (Am == 1) {
+            uint32_t rate = RateTable[roundToZero((Ar ^ 0x7F) - 0x10) + 32];
+            samples = 0x60000000 / rate;
+            uint32_t remainder = 0x60000000 % rate;
+            rate = RateTable[roundToZero((Ar ^ 0x7F) - 0x18) + 32];
+            samples += ceil(fmax(0, 0x1FFFFFFF - remainder) / static_cast<double>(rate));
+        }
+
+
+        AdsrSettings adsr;
+
+        adsr.attack = samples / SPU_SAMPLE_RATE;
+        //	}
+
+          // Decay Time
+
+        long envelope_level = 0x7FFFFFFF;
+
+        bool bSustainLevFound = false;
+        uint32_t realSustainLevel{ 0 };
+        // DLS decay rate value is to -96db (silence) not the sustain level
+        for (l = 0; envelope_level > 0; l++) {
+            if (4 * (Dr ^ 0x1F) < 0x18)
+                Dr = 0;
+            switch ((envelope_level >> 28) & 0x7) {
+            case 0: envelope_level -= RateTable[roundToZero((4 * (Dr ^ 0x1F)) - 0x18 + 0) + 32]; break;
+            case 1: envelope_level -= RateTable[roundToZero((4 * (Dr ^ 0x1F)) - 0x18 + 4) + 32]; break;
+            case 2: envelope_level -= RateTable[roundToZero((4 * (Dr ^ 0x1F)) - 0x18 + 6) + 32]; break;
+            case 3: envelope_level -= RateTable[roundToZero((4 * (Dr ^ 0x1F)) - 0x18 + 8) + 32]; break;
+            case 4: envelope_level -= RateTable[roundToZero((4 * (Dr ^ 0x1F)) - 0x18 + 9) + 32]; break;
+            case 5: envelope_level -= RateTable[roundToZero((4 * (Dr ^ 0x1F)) - 0x18 + 10) + 32]; break;
+            case 6: envelope_level -= RateTable[roundToZero((4 * (Dr ^ 0x1F)) - 0x18 + 11) + 32]; break;
+            case 7: envelope_level -= RateTable[roundToZero((4 * (Dr ^ 0x1F)) - 0x18 + 12) + 32]; break;
+            default: break;
+            }
+            if (!bSustainLevFound && ((envelope_level >> 27) & 0xF) <= Sl) {
+                realSustainLevel = envelope_level;
+                bSustainLevFound = true;
+            }
+        }
+        samples = l;
+        adsr.decay = samples / SPU_SAMPLE_RATE;
+
+        // Sustain Rate
+
+        envelope_level = 0x7FFFFFFF;
+        // increasing... we won't even bother
+        if (Sd == 0) {
+            adsr.sustain = -1;
+        }
+        else {
+            if (Sr == 0x7F)
+                adsr.sustain = -1;        // this is actually infinite
+            else {
+                // linear
+                if (Sm == 0) {
+                    uint32_t rate = RateTable[roundToZero((Sr ^ 0x7F) - 0x0F) + 32];
+                    samples = ceil(0x7FFFFFFF / static_cast<double>(rate));
+                }
+                else {
+                    l = 0;
+                    // DLS decay rate value is to -96db (silence) not the sustain level
+                    while (envelope_level > 0) {
+                        long envelope_level_diff{ 0 };
+                        long envelope_level_target{ 0 };
+
+                        switch ((envelope_level >> 28) & 0x7) {
+                        case 0: envelope_level_target = 0x00000000; envelope_level_diff = RateTable[roundToZero((Sr ^ 0x7F) - 0x1B + 0) + 32]; break;
+                        case 1: envelope_level_target = 0x0fffffff; envelope_level_diff = RateTable[roundToZero((Sr ^ 0x7F) - 0x1B + 4) + 32]; break;
+                        case 2: envelope_level_target = 0x1fffffff; envelope_level_diff = RateTable[roundToZero((Sr ^ 0x7F) - 0x1B + 6) + 32]; break;
+                        case 3: envelope_level_target = 0x2fffffff; envelope_level_diff = RateTable[roundToZero((Sr ^ 0x7F) - 0x1B + 8) + 32]; break;
+                        case 4: envelope_level_target = 0x3fffffff; envelope_level_diff = RateTable[roundToZero((Sr ^ 0x7F) - 0x1B + 9) + 32]; break;
+                        case 5: envelope_level_target = 0x4fffffff; envelope_level_diff = RateTable[roundToZero((Sr ^ 0x7F) - 0x1B + 10) + 32]; break;
+                        case 6: envelope_level_target = 0x5fffffff; envelope_level_diff = RateTable[roundToZero((Sr ^ 0x7F) - 0x1B + 11) + 32]; break;
+                        case 7: envelope_level_target = 0x6fffffff; envelope_level_diff = RateTable[roundToZero((Sr ^ 0x7F) - 0x1B + 12) + 32]; break;
+                        default: break;
                         }
 
-                        voices[v].GetSamples(&l, &r, dt, modIn);
-                        mL += l; mR += r;
+                        long steps = (envelope_level - envelope_level_target + (envelope_level_diff - 1)) / envelope_level_diff;
+                        envelope_level -= (envelope_level_diff * steps);
+                        l += steps;
                     }
+                    samples = l;
                 }
-
-                float rL = reverbBuffer[reverbCursor * 2], rR = reverbBuffer[reverbCursor * 2 + 1];
-                float fL = mL + rL * reverbMix, fR = mR + rR * reverbMix;
-                reverbBuffer[reverbCursor * 2] = fL * reverbDecay;
-                reverbBuffer[reverbCursor * 2 + 1] = fR * reverbDecay;
-                reverbCursor = (reverbCursor + 1) % reverbSize;
-                fL = tanhf(fL * masterVolume); fR = tanhf(fR * masterVolume);
-                pcmBuffer[i * 2] = (short)(fL * 32000); 
-                pcmBuffer[i * 2 + 1] = (short)(fR * 32000);
-               /* pcmBuffer[i * 2] = (short)(fL * 24000);
-                pcmBuffer[i * 2 + 1] = (short)(fR * 24000);*/
+                double timeInSecs = samples / SPU_SAMPLE_RATE;
+                adsr.sustain  = /*Sm ? timeInSecs : */linearAmpDecayTimeToLinDBDecayTime(timeInSecs);
             }
-            UpdateAudioStream(stream, pcmBuffer, frames);
         }
+
+        // Sustain Level
+        //realADSR->sustain_level = (double)envelope_level/(double)0x7FFFFFFF;//(long)ceil((double)envelope_level * 0.030517578139210854);	//in DLS, sustain level is measured as a percentage
+        if (Sl == 0)
+            realSustainLevel = 0x07FFFFFF;
+        adsr.sustain = realSustainLevel / static_cast<double>(0x7FFFFFFF);
+
+        // If decay is going unused, and there's a sustain rate with sustain level close to max...
+        //  we'll put the sustain_rate in place of the decay rate.
+        if ((adsr.decay < 2 || (Dr >= 0x0E && Sl >= 0x0C)) && Sr < 0x7E && Sd == 1) {
+            adsr.sustain = 0;
+            adsr.decay = adsr.sustain;
+            //realADSR->decay_time = 0.5;
+        }
+
+        // Release Time
+
+        //sustain_envelope_level = envelope_level;
+
+        // We do this because we measure release time from max volume to 0, not from sustain level to 0
+        envelope_level = 0x7FFFFFFF;
+
+        // if linear Rr Mode
+        if (Rm == 0) {
+            uint32_t rate = RateTable[roundToZero((4 * (Rr ^ 0x1F)) - 0x0C) + 32];
+
+            if (rate != 0)
+                samples = ceil(static_cast<double>(envelope_level) / rate);
+            else
+                samples = 0;
+        }
+        else if (Rm == 1) {
+            if ((Rr ^ 0x1F) * 4 < 0x18)
+                Rr = 0;
+            for (l = 0; envelope_level > 0; l++) {
+                switch ((envelope_level >> 28) & 0x7) {
+                case 0: envelope_level -= RateTable[roundToZero((4 * (Rr ^ 0x1F)) - 0x18 + 0) + 32]; break;
+                case 1: envelope_level -= RateTable[roundToZero((4 * (Rr ^ 0x1F)) - 0x18 + 4) + 32]; break;
+                case 2: envelope_level -= RateTable[roundToZero((4 * (Rr ^ 0x1F)) - 0x18 + 6) + 32]; break;
+                case 3: envelope_level -= RateTable[roundToZero((4 * (Rr ^ 0x1F)) - 0x18 + 8) + 32]; break;
+                case 4: envelope_level -= RateTable[roundToZero((4 * (Rr ^ 0x1F)) - 0x18 + 9) + 32]; break;
+                case 5: envelope_level -= RateTable[roundToZero((4 * (Rr ^ 0x1F)) - 0x18 + 10) + 32]; break;
+                case 6: envelope_level -= RateTable[roundToZero((4 * (Rr ^ 0x1F)) - 0x18 + 11) + 32]; break;
+                case 7: envelope_level -= RateTable[roundToZero((4 * (Rr ^ 0x1F)) - 0x18 + 12) + 32]; break;
+                default: break;
+                }
+            }
+            samples = l;
+        }
+        double timeInSecs = samples / SPU_SAMPLE_RATE;
+
+        //theRate = timeInSecs / sustain_envelope_level;
+        //timeInSecs = 0x7FFFFFFF * theRate;	//the release time value is more like a rate.  It is the time from max value to 0, not from sustain level.
+        //if (Rm == 0) // if it's linear
+        //	timeInSecs *=  LINEAR_RELEASE_COMPENSATION;
+
+        adsr.release = /*Rm ? timeInSecs : */linearAmpDecayTimeToLinDBDecayTime(timeInSecs);
+
+
+        return adsr;
     }
+
 };

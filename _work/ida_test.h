@@ -1,0 +1,6 @@
+
+enum TEST
+{
+	qwer,
+	qwess
+};
